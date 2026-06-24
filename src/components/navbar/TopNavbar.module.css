@@ -1,0 +1,219 @@
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  min-height: 4.5rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+  background: rgba(245, 247, 251, 0.92);
+  backdrop-filter: blur(18px);
+}
+
+.left,
+.right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.search {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: min(440px, 42vw);
+  min-height: 2.7rem;
+  padding: 0 0.85rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  color: var(--text);
+  background: transparent;
+}
+
+.avatar {
+  display: inline-grid;
+  width: 2.5rem;
+  height: 2.5rem;
+  place-items: center;
+  border-radius: 999px;
+  color: #fff;
+  background: #0f766e;
+  font-weight: 900;
+}
+
+.profile {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.profile small {
+  display: block;
+  color: var(--muted);
+}
+
+.notificationWrap {
+  position: relative;
+}
+
+.bellButton {
+  position: relative;
+}
+
+.badge {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.15rem;
+  display: inline-grid;
+  min-width: 1.15rem;
+  height: 1.15rem;
+  place-items: center;
+  border: 2px solid #f8fafc;
+  border-radius: 999px;
+  color: #fff;
+  background: #dc2626;
+  font-size: 0.68rem;
+  font-weight: 900;
+}
+
+.notificationMenu {
+  position: absolute;
+  top: calc(100% + 0.7rem);
+  right: 0;
+  z-index: 30;
+  width: min(360px, calc(100vw - 2rem));
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 58px rgba(15, 23, 42, 0.18);
+}
+
+.notificationHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.notificationHeader button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-height: 2rem;
+  border: 0;
+  border-radius: 8px;
+  padding: 0 0.65rem;
+  color: var(--brand);
+  background: var(--brand-soft);
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.notificationList {
+  display: grid;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.notificationItem {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  width: 100%;
+  border: 0;
+  border-bottom: 1px solid #edf2f7;
+  padding: 0.85rem 0.9rem;
+  color: var(--text);
+  background: #ffffff;
+  text-align: left;
+}
+
+.notificationItem:hover {
+  background: #f8fbff;
+}
+
+.notificationItem strong,
+.notificationItem small {
+  display: block;
+}
+
+.notificationItem small {
+  margin-top: 0.22rem;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.unreadDot,
+.readDot {
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-top: 0.35rem;
+  border-radius: 999px;
+}
+
+.unreadDot {
+  background: #2563eb;
+  box-shadow: 0 0 0 4px #dbeafe;
+}
+
+.readDot {
+  background: #cbd5e1;
+}
+
+.emptyState {
+  margin: 0;
+  padding: 1rem;
+  color: var(--muted);
+}
+
+.menuButton {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .menuButton {
+    display: inline-flex;
+  }
+
+  .search {
+    width: min(360px, 50vw);
+  }
+}
+
+@media (max-width: 640px) {
+  .topbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .search {
+    width: 100%;
+  }
+
+  .left,
+  .right {
+    justify-content: space-between;
+    width: 100%;
+  }
+
+  .notificationMenu {
+    right: -5.5rem;
+  }
+}

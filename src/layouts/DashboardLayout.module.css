@@ -1,0 +1,29 @@
+.shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.main {
+  flex: 1;
+  min-width: 0;
+}
+
+.content {
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  padding: 1.25rem;
+}
+
+.overlay {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .overlay {
+    position: fixed;
+    z-index: 15;
+    inset: 0;
+    display: block;
+    background: rgba(15, 23, 42, 0.35);
+  }
+}
