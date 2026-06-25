@@ -1,33 +1,85 @@
-import { useState } from "react";
-import { CheckCircle2, Clock, FileUp, LockKeyhole, Send } from "lucide-react";
+import { useRef, useState } from "react";
+import { CheckCircle2, Clock, FileUp, LockKeyhole, Send, X } from "lucide-react";
 import Badge from "../../components/common/Badge";
 import PageHeader from "../../components/common/PageHeader";
 import useAuth from "../../hooks/useAuth";
 import { useRoleData } from "../../hooks/useRoleData";
+import { assignmentService } from "../../services/assignmentService";
 import { formatDate } from "../../utils/formatters";
 import styles from "../../styles/ui.module.css";
 
 export default function Assignments() {
   const { user } = useAuth();
-  const { assignments } = useRoleData(user);
-  const [submissionState, setSubmissionState] = useState({});
-  const [selectedAssignment, setSelectedAssignment] = useState(assignments[0]?.id || "");
-  const selected = assignments.find((assignment) => assignment.id === selectedAssignment);
+  const { assignments, loading } = useRoleData(user);
+  const [selectedAssignment, setSelectedAssignment] = useState("");
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+  const [successMsg, setSuccessMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [localStatuses, setLocalStatuses] = useState({});
+  const fileInputRef = useRef(null);
 
-  const getStatus = (assignment) =>
-    submissionState[assignment.id] || assignment.studentStatus || assignment.status;
+  const activeAssignments = assignments || [];
+  const selected = activeAssignments.find((a) => a.id === selectedAssignment) || activeAssignments[0];
 
-  const submitAssignment = (assignmentId) => {
-    setSubmissionState((current) => ({
-      ...current,
-      [assignmentId]: "Submitted",
-    }));
+  // Set default selected assignment when data loads
+  if (!selectedAssignment && activeAssignments.length > 0) {
+    setSelectedAssignment(activeAssignments[0].id);
+  }
+
+  const getStatus = (assignment) => {
+    return localStatuses[assignment.id] || assignment.student_status || "Not Submitted";
   };
 
-  const pendingCount = assignments.filter(
-    (assignment) => getStatus(assignment) !== "Submitted",
-  ).length;
-  const submittedCount = assignments.length - pendingCount;
+  const handleFileSelect = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (event) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      setErrorMsg("");
+      setSuccessMsg("");
+    }
+  };
+
+  const clearFile = () => {
+    setSelectedFile(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const submitWork = async (assignmentId) => {
+    if (!selectedFile) {
+      setErrorMsg("Please select a file to upload.");
+      return;
+    }
+
+    setUploading(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    try {
+      await assignmentService.submitAssignment(assignmentId, selectedFile);
+      setLocalStatuses((current) => ({
+        ...current,
+        [assignmentId]: "Submitted",
+      }));
+      setSuccessMsg("Assignment submitted successfully!");
+      clearFile();
+    } catch (err) {
+      console.error("Submission failed", err);
+      setErrorMsg("Failed to upload submission. Please try again.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  if (loading) {
+    return <PageHeader title="Loading..." subtitle="Loading assignments..." />;
+  }
 
   return (
     <section className={styles.page}>
@@ -36,84 +88,125 @@ export default function Assignments() {
         subtitle="Teacher-created assignments for your mapped courses. Open each task, review instructions, and submit work from this page."
       />
       <div className={styles.learningSummary}>
-        <div><strong>{assignments.length}</strong><span>Total assignments</span></div>
-        <div><strong>{pendingCount}</strong><span>Pending</span></div>
-        <div><strong>{submittedCount}</strong><span>Submitted</span></div>
+        <div><strong>{activeAssignments.length}</strong><span>Total assignments</span></div>
+        <div><strong>{activeAssignments.filter(a => getStatus(a) !== "Submitted" && getStatus(a) !== "Graded").length}</strong><span>Pending</span></div>
+        <div><strong>{activeAssignments.filter(a => getStatus(a) === "Submitted" || getStatus(a) === "Graded").length}</strong><span>Submitted</span></div>
       </div>
       <div className={styles.assignmentWorkspace}>
         <div className={styles.assignmentList}>
-          {assignments.map((assignment) => {
+          {activeAssignments.map((assignment) => {
             const status = getStatus(assignment);
             return (
               <button
                 className={`${styles.assignmentCard} ${
-                  selectedAssignment === assignment.id ? styles.assignmentCardActive : ""
+                  selected?.id === assignment.id ? styles.assignmentCardActive : ""
                 }`}
                 key={assignment.id}
                 type="button"
-                onClick={() => setSelectedAssignment(assignment.id)}
+                onClick={() => {
+                  setSelectedAssignment(assignment.id);
+                  clearFile();
+                  setErrorMsg("");
+                  setSuccessMsg("");
+                }}
               >
                 <span className={styles.iconBox}>
-                  {status === "Submitted" ? <CheckCircle2 size={19} /> : <Clock size={19} />}
+                  {status === "Submitted" || status === "Graded" ? <CheckCircle2 size={19} /> : <Clock size={19} />}
                 </span>
                 <span>
                   <strong>{assignment.title}</strong>
                   <small>{assignment.courseTitle}</small>
                   <small>Due {formatDate(assignment.dueDate)}</small>
                 </span>
-                <Badge variant={status === "Submitted" ? "success" : "warning"}>{status}</Badge>
+                <Badge variant={status === "Submitted" || status === "Graded" ? "success" : "warning"}>{status}</Badge>
               </button>
             );
           })}
+          {activeAssignments.length === 0 && <p className={styles.muted}>No assignments assigned.</p>}
         </div>
-        {selected && (
+        {selected ? (
           <article className={styles.assignmentDetail}>
             <div className={styles.panelHeader}>
               <h2 className={styles.panelTitle}>{selected.title}</h2>
               <Badge>{selected.courseTitle}</Badge>
             </div>
             <div className={styles.panelBody}>
+              {errorMsg && <div className={styles.alert}>{errorMsg}</div>}
+              {successMsg && <div className={styles.successMessage}>{successMsg}</div>}
+              
               <div className={styles.detailGrid}>
-                <p><strong>Teacher:</strong> {selected.createdBy}</p>
-                <p><strong>Created:</strong> {formatDate(selected.createdAt)}</p>
                 <p><strong>Due:</strong> {formatDate(selected.dueDate)}</p>
-                <p><strong>Marks:</strong> {selected.grade ? `${selected.grade}/${selected.maxMarks}` : selected.maxMarks}</p>
+                <p><strong>Marks:</strong> {selected.grade !== null && selected.grade !== undefined ? `${selected.grade}/${selected.total_marks}` : selected.total_marks}</p>
               </div>
-              <p className={styles.muted}>{selected.instructions}</p>
-              <div className={styles.materialGrid}>
-                {selected.attachments.map((attachment) => (
-                  <button className={styles.materialCard} key={attachment} type="button">
-                    <span className={styles.iconBox}><FileUp size={18} /></span>
-                    <strong>{attachment}</strong>
-                    <small>Teacher attachment</small>
-                  </button>
-                ))}
-              </div>
+              <p className={styles.muted} style={{ margin: "1.5rem 0", whiteSpace: "pre-wrap" }}>{selected.instructions}</p>
+              
+              <input
+                ref={fileInputRef}
+                type="file"
+                style={{ display: "none" }}
+                onChange={handleFileChange}
+              />
+
               <div className={styles.submissionBox}>
-                {getStatus(selected) === "Submitted" ? (
+                {getStatus(selected) === "Submitted" || getStatus(selected) === "Graded" ? (
                   <>
                     <CheckCircle2 size={22} />
                     <div>
                       <strong>Submission received</strong>
-                      <p>{selected.submittedAt ? `Submitted on ${formatDate(selected.submittedAt)}` : "Submitted just now"}</p>
+                      <p>{selected.submitted_at ? `Submitted on ${formatDate(selected.submitted_at)}` : "Submitted recently"}</p>
                     </div>
-                    {selected.grade ? <Badge variant="success">Graded</Badge> : <Badge>Awaiting grade</Badge>}
+                    {getStatus(selected) === "Graded" ? (
+                      <Badge variant="success">Graded</Badge>
+                    ) : (
+                      <Badge>Awaiting grade</Badge>
+                    )}
                   </>
                 ) : (
                   <>
                     <LockKeyhole size={22} />
                     <div>
-                      <strong>Ready for submission</strong>
-                      <p>Attach your completed work and submit before the due date.</p>
+                      {selectedFile ? (
+                        <>
+                          <strong>Selected File: {selectedFile.name}</strong>
+                          <p>Ready to upload and submit.</p>
+                        </>
+                      ) : (
+                        <>
+                          <strong>Ready for submission</strong>
+                          <p>Attach your completed work and submit before the due date.</p>
+                        </>
+                      )}
                     </div>
-                    <button className={styles.button} type="button" onClick={() => submitAssignment(selected.id)}>
-                      <Send size={17} /> Submit work
-                    </button>
+                    <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                      {selectedFile && (
+                        <button className={styles.iconButton} type="button" onClick={clearFile} title="Clear selection">
+                          <X size={16} />
+                        </button>
+                      )}
+                      <button className={styles.buttonSecondary} type="button" onClick={handleFileSelect} disabled={uploading}>
+                        Choose file
+                      </button>
+                      {selectedFile && (
+                        <button className={styles.button} type="button" onClick={() => submitWork(selected.id)} disabled={uploading}>
+                          <Send size={17} /> {uploading ? "Submitting..." : "Submit work"}
+                        </button>
+                      )}
+                    </div>
                   </>
                 )}
               </div>
+
+              {selected.grade !== null && selected.grade !== undefined && (
+                <div style={{ marginTop: "1.5rem", padding: "1rem", backgroundColor: "rgba(34, 197, 94, 0.1)", border: "1px solid rgba(34, 197, 94, 0.2)", borderRadius: "var(--radius-md)" }}>
+                  <h3 style={{ margin: 0, color: "rgb(34, 197, 94)", fontSize: "1.1rem" }}>Grading Results</h3>
+                  <p style={{ margin: "0.5rem 0 0.2rem 0" }}><strong>Score:</strong> {selected.grade} / {selected.total_marks}</p>
+                  {selected.feedback && <p style={{ margin: 0, fontStyle: "italic", fontSize: "0.95rem" }}>"{selected.feedback}"</p>}
+                </div>
+              )}
             </div>
           </article>
+        ) : (
+          !loading && <p className={styles.muted}>Select an assignment to view details.</p>
         )}
       </div>
     </section>

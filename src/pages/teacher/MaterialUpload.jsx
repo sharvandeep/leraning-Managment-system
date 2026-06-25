@@ -1,6 +1,5 @@
 import { createElement, useEffect, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, FileText, FileVideo, NotebookTabs, Upload, X } from "lucide-react";
-import Badge from "../../components/common/Badge";
 import PageHeader from "../../components/common/PageHeader";
 import SelectField from "../../components/forms/SelectField";
 import TextField from "../../components/forms/TextField";
@@ -8,6 +7,8 @@ import useAuth from "../../hooks/useAuth";
 import { useRoleData } from "../../hooks/useRoleData";
 import useSessionState from "../../hooks/useSessionState";
 import { formatDate } from "../../utils/formatters";
+import { courseService } from "../../services/courseService";
+import { materialService } from "../../services/materialService";
 import styles from "../../styles/ui.module.css";
 
 const materialTypes = [
@@ -17,26 +18,28 @@ const materialTypes = [
 ];
 
 function formatFileSize(bytes) {
+  if (!bytes) return "0 B";
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
   return `${(bytes / 1048576).toFixed(1)} MB`;
 }
 
-import { courseService } from "../../services/courseService";
-import { materialService } from "../../services/materialService";
-
 export default function MaterialUpload() {
   const { user } = useAuth();
   const { courses, loading } = useRoleData(user);
-  const [materials, setMaterials] = useSessionState("lms-teacher-materials", []);
+  
+  const [dbMaterials, setDbMaterials] = useState([]);
+  const [loadingMaterials, setLoadingMaterials] = useState(false);
+  
   const [selectedType, setSelectedType] = useState("PDF");
   const [selectedFile, setSelectedFile] = useState(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const fileInputRef = useRef(null);
   const [modules, setModules] = useState([]);
-  const [form, setForm] = useState({
-    courseId: courses[0]?.id || "",
+  
+  const [form, setForm] = useSessionState("lms-teacher-upload-form", {
+    courseId: "",
     moduleId: "",
     title: "",
     description: "",
@@ -47,13 +50,15 @@ export default function MaterialUpload() {
     if (!form.courseId && courses.length > 0) {
       setForm((current) => ({ ...current, courseId: courses[0].id }));
     }
-  }, [courses, form.courseId]);
+  }, [courses, form.courseId, setForm]);
 
-  // Load modules when selected course changes
+  // Load modules and backend materials when selected course changes
   useEffect(() => {
     if (!form.courseId) return;
     let active = true;
-    async function loadModules() {
+    
+    async function loadCourseDetails() {
+      setLoadingMaterials(true);
       try {
         const fetchedModules = await courseService.getModules(form.courseId);
         if (active) {
@@ -63,19 +68,33 @@ export default function MaterialUpload() {
             moduleId: fetchedModules[0]?.id || "",
           }));
         }
+        
+        const courseData = await courseService.getCourseById(form.courseId);
+        if (active) {
+          const allMats = courseData.modules.flatMap(m => 
+            (m.materials || []).map(mat => ({
+              id: String(mat.material_id || mat.id),
+              title: mat.title,
+              type: mat.file_type || "PDF",
+              uploadedAt: mat.uploaded_at,
+              file_path: mat.file_path,
+              moduleTitle: m.title
+            }))
+          );
+          setDbMaterials(allMats);
+          setLoadingMaterials(false);
+        }
       } catch (err) {
-        console.error("Failed loading modules", err);
+        console.error("Failed loading course details in uploader", err);
+        if (active) setLoadingMaterials(false);
       }
     }
-    loadModules();
+    
+    loadCourseDetails();
     return () => {
       active = false;
     };
-  }, [form.courseId]);
-
-  const visibleMaterials = materials.filter((material) =>
-    courses.some((course) => course.id === material.courseId),
-  );
+  }, [form.courseId, setForm]);
 
   const currentTypeConfig = materialTypes.find((item) => item.type === selectedType);
 
@@ -110,7 +129,7 @@ export default function MaterialUpload() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const saveMaterial = async (status) => {
+  const saveMaterial = async () => {
     setError("");
     setSuccess("");
 
@@ -129,6 +148,7 @@ export default function MaterialUpload() {
     }
 
     let targetModuleId = form.moduleId;
+    // If no module is selected, create a default "General Materials" module
     if (!targetModuleId) {
       try {
         const defaultMod = await courseService.createModule(course.id, {
@@ -139,43 +159,43 @@ export default function MaterialUpload() {
         targetModuleId = defaultMod.id;
       } catch (err) {
         console.error("Failed to create default module", err);
-        targetModuleId = `fallback-mod-${Date.now()}`;
+        setError("Failed to initialize course module for upload.");
+        return;
       }
     }
 
     const rawFile = fileInputRef.current?.files?.[0];
-    let uploadedMaterial;
-    if (rawFile) {
-      uploadedMaterial = await materialService.uploadMaterial(targetModuleId, rawFile, form.title.trim());
-    } else {
-      uploadedMaterial = {
-        material_id: `session-mat-${Date.now()}`,
-        file_url: "#",
-        title: form.title.trim(),
-      };
+    if (!rawFile) {
+      setError("Please choose a file to upload.");
+      return;
     }
 
-    setMaterials((current) => [
-      ...current,
-      {
-        id: String(uploadedMaterial.material_id || `session-mat-${Date.now()}`),
-        courseId: course.id,
-        courseTitle: course.title,
-        title: form.title.trim(),
-        description: form.description.trim(),
-        type: selectedType,
-        uploadedBy: user.name,
-        uploadedAt: new Date().toISOString(),
-        fileName: selectedFile.name,
-        fileSize: selectedFile.size,
-        status,
-      },
-    ]);
-    
-    setForm({ courseId: course.id, moduleId: targetModuleId, title: "", description: "" });
-    setSelectedFile(null);
-    if (fileInputRef.current) fileInputRef.current.value = "";
-    setSuccess(`Material "${form.title.trim()}" ${status === "Published" ? "published" : "saved as draft"} successfully!`);
+    try {
+      // Upload the file directly to the backend
+      await materialService.uploadMaterial(targetModuleId, rawFile, form.title.trim());
+      
+      // Re-fetch course materials to update the list dynamically
+      const courseData = await courseService.getCourseById(form.courseId);
+      const allMats = courseData.modules.flatMap(m => 
+        (m.materials || []).map(mat => ({
+          id: String(mat.material_id || mat.id),
+          title: mat.title,
+          type: mat.file_type || "PDF",
+          uploadedAt: mat.uploaded_at,
+          file_path: mat.file_path,
+          moduleTitle: m.title
+        }))
+      );
+      setDbMaterials(allMats);
+      
+      setForm({ courseId: course.id, moduleId: targetModuleId, title: "", description: "" });
+      setSelectedFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      setSuccess(`Material "${form.title.trim()}" uploaded successfully to the backend!`);
+    } catch (err) {
+      console.error("Failed to upload material", err);
+      setError("Failed to upload material to the backend. Please try again.");
+    }
   };
 
   if (loading) {
@@ -271,30 +291,72 @@ export default function MaterialUpload() {
                 </div>
               </div>
               <div className={styles.heroActions}>
-                <button className={styles.button} type="button" onClick={() => saveMaterial("Published")}>
-                  <CheckCircle2 size={18} /> Publish material
-                </button>
-                <button className={styles.buttonSecondary} type="button" onClick={() => saveMaterial("Draft")}>
-                  Save draft
+                <button className={styles.button} type="button" onClick={saveMaterial}>
+                  <CheckCircle2 size={18} /> Upload to Backend
                 </button>
               </div>
             </form>
           </div>
         </article>
+        
+        {/* Right Panel: Uploaded Materials (Backend) */}
         <article className={styles.panel}>
-          <div className={styles.panelHeader}><h2 className={styles.panelTitle}>Session Uploads</h2></div>
+          <div className={styles.panelHeader}>
+            <h2 className={styles.panelTitle}>Uploaded Materials (Backend)</h2>
+          </div>
           <div className={styles.panelBody}>
-            <div className={styles.materialGrid}>
-              {visibleMaterials.map((material) => (
-                <article className={styles.materialCard} key={material.id}>
-                  <Badge variant={material.status === "Published" ? "success" : "warning"}>{material.status}</Badge>
-                  <strong>{material.title}</strong>
-                  <small>{material.courseTitle}</small>
-                  <small>{material.type} · {material.fileSize ? formatFileSize(material.fileSize) : ""} · {formatDate(material.uploadedAt)}</small>
-                </article>
-              ))}
-              {!visibleMaterials.length && <p className={styles.muted}>No session uploads yet.</p>}
-            </div>
+            {loadingMaterials ? (
+              <p className={styles.muted}>Loading course materials...</p>
+            ) : dbMaterials.length === 0 ? (
+              <p className={styles.muted}>No materials uploaded for this course yet.</p>
+            ) : (
+              <div className={styles.materialGrid} style={{ display: "grid", gap: "12px" }}>
+                {dbMaterials.map((material) => {
+                  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+                  const rootBaseUrl = apiBaseUrl.replace(/\/api$/, "");
+                  const fullFilePath = material.file_path?.startsWith("http") 
+                    ? material.file_path 
+                    : `${rootBaseUrl}${material.file_path}`;
+                  return (
+                    <article className={styles.materialCard} key={material.id} style={{ border: '1px solid var(--line)', borderRadius: '12px', padding: '16px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
+                        <div style={{ display: 'flex', flexDirection: 'column' }}>
+                          <strong style={{ fontSize: '14px' }}>{material.title}</strong>
+                          <small style={{ fontSize: '11px', color: 'var(--muted)' }}>
+                            {material.type} · {material.moduleTitle}
+                          </small>
+                        </div>
+                      </div>
+                      <small style={{ display: 'block', fontSize: '11px', color: 'var(--muted)', marginBottom: '12px' }}>
+                        Uploaded: {formatDate(material.uploadedAt)}
+                      </small>
+                      <div>
+                        <a 
+                          className={styles.buttonSecondary} 
+                          href={fullFilePath} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          style={{ 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            gap: '6px', 
+                            textDecoration: 'none',
+                            padding: '6px 12px',
+                            fontSize: '13px',
+                            borderRadius: '6px',
+                            background: 'var(--panel-soft)',
+                            color: 'var(--text)',
+                            border: '1px solid var(--line)'
+                          }}
+                        >
+                          Preview File
+                        </a>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </article>
       </div>
@@ -315,4 +377,3 @@ function UploadTile({ active, icon, title, text, onClick }) {
     </button>
   );
 }
-

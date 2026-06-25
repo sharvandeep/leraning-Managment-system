@@ -1,17 +1,17 @@
 :root {
-  --bg: #f5f7fb;
+  --bg: #f8fafc;
   --panel: #ffffff;
-  --panel-soft: #f8fafc;
-  --text: #162033;
-  --muted: #67748a;
-  --line: #dbe3ef;
-  --brand: #2563eb;
-  --brand-dark: #1747b7;
-  --brand-soft: #e8f0ff;
-  --success: #0f9f6e;
-  --warning: #b7791f;
-  --danger: #dc2626;
-  --shadow: 0 18px 42px rgba(15, 23, 42, 0.08);
+  --panel-soft: #f1f5f9;
+  --text: #0f172a;
+  --muted: #64748b;
+  --line: #e2e8f0;
+  --brand: #4f46e5;
+  --brand-dark: #3730a3;
+  --brand-soft: #e0e7ff;
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
   color: var(--text);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
@@ -32,9 +32,12 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
+  color: var(--text);
   background:
-    radial-gradient(circle at top left, rgba(37, 99, 235, 0.12), transparent 30rem),
+    radial-gradient(circle at top left, rgba(99, 102, 241, 0.06), transparent 45rem),
+    radial-gradient(circle at bottom right, rgba(168, 85, 247, 0.04), transparent 45rem),
     var(--bg);
+  background-attachment: fixed;
 }
 
 button,
@@ -55,4 +58,261 @@ a {
 
 #root {
   min-height: 100vh;
+}
+
+/* --- PREMIUM INTERACTIVE EFFECTS FOR LIGHT THEME (FLOATING, LIGHT GLOW, GLASS SHIMMER) --- */
+
+/* 1. Floating Hover Effect */
+.floating-hover {
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.3s ease, border-color 0.3s ease !important;
+}
+.floating-hover:hover {
+  transform: translateY(-6px) !important;
+  border-color: rgba(99, 102, 241, 0.2) !important;
+  box-shadow: 0 15px 30px rgba(15, 23, 42, 0.08), 0 0 15px rgba(99, 102, 241, 0.1) !important;
+}
+
+/* 2. Slow Continuous Floating Animation */
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-5px); }
+  100% { transform: translateY(0px); }
+}
+.floating-anim {
+  animation: float 5s ease-in-out infinite;
+}
+
+/* 3. Soft Glowing Backlight Effect (Light Neon Aura) */
+.backlight {
+  position: relative;
+  z-index: 1;
+}
+.backlight::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  border-radius: inherit;
+  z-index: -1;
+  opacity: 0.06;
+  filter: blur(8px);
+  transition: opacity 0.35s ease, filter 0.35s ease;
+}
+.backlight:hover::before {
+  opacity: 0.15;
+  filter: blur(12px);
+}
+
+/* 4. Glass Shimmer Shine Reflection (Polished Glossy Sweeper) */
+.shimmer-shine {
+  position: relative;
+  overflow: hidden !important;
+}
+.shimmer-shine::after {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -70%;
+  width: 45%;
+  height: 200%;
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.4) 25%,
+    rgba(255, 255, 255, 0.7) 50%,
+    rgba(255, 255, 255, 0.4) 75%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: rotate(25deg);
+  opacity: 0;
+  pointer-events: none;
+}
+.shimmer-shine:hover::after {
+  animation: shine 1.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+@keyframes shine {
+  0% {
+    left: -70%;
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.8;
+  }
+  80% {
+    opacity: 0.8;
+  }
+  100% {
+    left: 130%;
+    opacity: 0;
+  }
+}
+
+/* --- GLOBAL PREMIUM LIGHT THEME OVERRIDES --- */
+
+/* 1. Sidebar overrides */
+[class*="sidebar"] {
+  background: #ffffff !important;
+  border-right: 1px solid var(--line) !important;
+  box-shadow: 4px 0 24px rgba(15, 23, 42, 0.02) !important;
+}
+[class*="sidebar"] [class*="link"] {
+  color: #64748b !important;
+  transition: all 0.2s ease;
+}
+[class*="sidebar"] [class*="link"]:hover,
+[class*="sidebar"] [class*="active"] {
+  color: var(--brand) !important;
+  background: var(--brand-soft) !important;
+}
+
+/* 2. TopNavbar overrides */
+[class*="topbar"] {
+  background: rgba(248, 250, 252, 0.8) !important;
+  backdrop-filter: blur(16px) !important;
+  border-bottom: 1px solid var(--line) !important;
+}
+[class*="topbar"] [class*="search"] {
+  background: #ffffff !important;
+  border: 1px solid var(--line) !important;
+}
+[class*="topbar"] [class*="search"] input {
+  color: var(--text) !important;
+}
+[class*="topbar"] [class*="profile"] {
+  color: var(--text) !important;
+}
+[class*="topbar"] [class*="profile"] small {
+  color: var(--muted) !important;
+}
+[class*="topbar"] [class*="notificationMenu"] {
+  background: #ffffff !important;
+  border: 1px solid var(--line) !important;
+  box-shadow: 0 15px 35px rgba(15, 23, 42, 0.08) !important;
+}
+[class*="topbar"] [class*="notificationHeader"] {
+  border-bottom: 1px solid var(--line) !important;
+}
+[class*="topbar"] [class*="notificationItem"] {
+  background: #ffffff !important;
+  border-bottom: 1px solid var(--line) !important;
+  color: var(--text) !important;
+  transition: all 0.2s ease;
+}
+[class*="topbar"] [class*="notificationItem"]:hover {
+  background: var(--panel-soft) !important;
+}
+[class*="topbar"] [class*="notificationItem"] small {
+  color: var(--muted) !important;
+}
+[class*="topbar"] [class*="badge"] {
+  border: 2px solid #ffffff !important;
+}
+
+/* 3. Global Form Inputs, Textareas, Selects overrides */
+.input,
+.select,
+.textarea,
+select.select,
+input.input,
+textarea.textarea,
+[class*="select"],
+[class*="input"],
+[class*="textarea"] {
+  background: #ffffff !important;
+  border: 1px solid var(--line) !important;
+  color: var(--text) !important;
+}
+.input:focus,
+.select:focus,
+.textarea:focus,
+select.select:focus,
+input.input:focus,
+textarea.textarea:focus,
+[class*="select"]:focus,
+[class*="input"]:focus,
+[class*="textarea"]:focus {
+  border-color: var(--brand) !important;
+  box-shadow: 0 0 0 4px var(--brand-soft) !important;
+}
+[class*="field"] span,
+.field span {
+  color: var(--text) !important;
+}
+
+/* 4. Secondary and Icon Buttons */
+[class*="buttonSecondary"],
+.buttonSecondary,
+[class*="iconButton"],
+.iconButton {
+  background: #f1f5f9 !important;
+  color: var(--text) !important;
+  transition: all 0.2s ease;
+}
+[class*="buttonSecondary"]:hover,
+.buttonSecondary:hover,
+[class*="iconButton"]:hover,
+.iconButton:hover {
+  background: #e2e8f0 !important;
+}
+
+/* 5. Table Header and Cell Styles */
+[class*="table"] th,
+.table th {
+  color: var(--text) !important;
+  background: var(--panel-soft) !important;
+  border-bottom: 2px solid var(--line) !important;
+}
+[class*="table"] td,
+.table td {
+  border-bottom: 1px solid var(--line) !important;
+  color: var(--text) !important;
+}
+
+/* 6. Authentication Screens overrides (Login / Register) */
+[class*="authShell"] {
+  background: #f1f5f9 !important;
+}
+[class*="authPanel"] {
+  background: #ffffff !important;
+  border-left: 1px solid var(--line) !important;
+  box-shadow: -8px 0 24px rgba(15, 23, 42, 0.02) !important;
+}
+[class*="authCard"] h2,
+[class*="authCard"] p {
+  color: var(--text) !important;
+}
+[class*="authCard"] span,
+[class*="authCard"] label {
+  color: var(--text) !important;
+}
+[class*="authCard"] a {
+  color: var(--brand) !important;
+}
+[class*="authCard"] a:hover {
+  color: var(--brand-dark) !important;
+}
+
+/* 7. Student/Teacher Hero Card (Profile Card) Overhaul */
+[class*="studentHero"],
+.studentHero,
+[class*="courseDetailHero"],
+.courseDetailHero {
+  background: linear-gradient(135deg, #e0e7ff, #ecfdf5) !important;
+  border: 1px solid rgba(99, 102, 241, 0.15) !important;
+  color: var(--text) !important;
+  box-shadow: 0 10px 25px rgba(99, 102, 241, 0.05) !important;
+}
+[class*="studentHero"] h1,
+[class*="studentHero"] h2,
+.studentHero h1,
+.studentHero h2,
+[class*="courseDetailHero"] h2,
+.courseDetailHero h2 {
+  color: var(--text) !important;
+}
+[class*="studentHero"] p,
+.studentHero p,
+[class*="courseDetailHero"] p,
+.courseDetailHero p {
+  color: var(--muted) !important;
 }

@@ -1,8 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Bell, CheckCheck, LogOut, Menu, Search, UserRound } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
-import { notifications } from "../../mock/notifications";
+import { notificationService } from "../../services/notificationService";
 import ui from "../../styles/ui.module.css";
 import styles from "./TopNavbar.module.css";
 
@@ -12,19 +12,53 @@ export default function TopNavbar({ onMenuClick }) {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [readIds, setReadIds] = useState([]);
   const [query, setQuery] = useState("");
+  const [liveNotifications, setLiveNotifications] = useState([]);
+
   const notificationTarget =
     user.role === "student" ? "/student/notifications" : `/${user.role}/dashboard`;
   const profileTarget =
     user.role === "admin" ? "/admin/settings" : `/${user.role}/profile`;
+
+  // Fetch real database-backed notifications whenever menu opens or user changes
+  useEffect(() => {
+    if (!user || !isNotificationsOpen) return;
+    let active = true;
+    notificationService.getNotifications()
+      .then((data) => {
+        if (active) {
+          setLiveNotifications(data);
+        }
+      })
+      .catch((err) => console.error("Failed to load notifications in TopNavbar", err));
+    return () => {
+      active = false;
+    };
+  }, [user, isNotificationsOpen]);
+
+  // Also fetch initial unread count on mount
+  useEffect(() => {
+    if (!user) return;
+    let active = true;
+    notificationService.getNotifications()
+      .then((data) => {
+        if (active) {
+          setLiveNotifications(data);
+        }
+      })
+      .catch((err) => console.error("Failed to load notifications in TopNavbar mount", err));
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
   const roleNotifications = useMemo(
     () =>
-      notifications
-        .filter((notification) => notification.role === user.role)
+      liveNotifications
         .map((notification) => ({
           ...notification,
-          unread: notification.unread && !readIds.includes(notification.id),
+          unread: !notification.isRead && !readIds.includes(notification.id),
         })),
-    [readIds, user.role],
+    [liveNotifications, readIds],
   );
   const unreadCount = roleNotifications.filter((notification) => notification.unread).length;
 

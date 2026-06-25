@@ -5,7 +5,7 @@ import styles from "../../styles/ui.module.css";
 
 export default function CourseCard({ course, action }) {
   return (
-    <article className={styles.courseCard}>
+    <article className={`${styles.courseCard} floating-hover backlight shimmer-shine`}>
       <div>
         <div className={styles.courseMeta}>
           <Badge>{course.code}</Badge>

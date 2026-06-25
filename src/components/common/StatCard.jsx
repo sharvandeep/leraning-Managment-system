@@ -2,7 +2,7 @@ import styles from "../../styles/ui.module.css";
 
 export default function StatCard({ label, value, meta, icon: Icon }) {
   return (
-    <article className={styles.statCard}>
+    <article className={`${styles.statCard} floating-hover backlight`}>
       <div className={styles.statTop}>
         <p className={styles.statLabel}>{label}</p>
         {Icon && (

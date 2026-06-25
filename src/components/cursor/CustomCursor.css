@@ -1,0 +1,104 @@
+/* ==========================================================
+   CUSTOM CURSOR — DOT at center, SQUARE rotates AROUND it
+   ========================================================== */
+
+/* Hide native cursor */
+.custom-cursor-active,
+.custom-cursor-active * {
+  cursor: none !important;
+}
+
+/* ---- Root wrapper (follows mouse) ---- */
+.cursor-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 99999;
+  will-change: transform;
+  /* CSS vars controlled by JS */
+  --box-w: 36px;
+  --box-h: 36px;
+}
+
+/* ---- The center DOT ---- */
+.cursor-dot {
+  position: absolute;
+  top: -4px;
+  left: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+  box-shadow:
+    0 0 6px rgba(79, 70, 229, 0.5),
+    0 0 18px rgba(124, 58, 237, 0.2);
+  z-index: 2;
+  transition: transform 0.25s ease, opacity 0.2s ease;
+}
+
+/* Dot shrinks slightly on hover */
+.cursor-root.is-hover .cursor-dot {
+  transform: scale(0.7);
+  opacity: 0.6;
+}
+
+/* ---- The rotating SQUARE ---- */
+.cursor-square {
+  position: absolute;
+  /* Center the square on the dot */
+  top: calc(var(--box-h) / -2);
+  left: calc(var(--box-w) / -2);
+  width: var(--box-w);
+  height: var(--box-h);
+  border: 2px solid rgba(79, 70, 229, 0.45);
+  border-radius: 6px;
+  background: transparent;
+  z-index: 1;
+
+  /* Continuous rotation around the dot */
+  animation: spinSquare 3.5s linear infinite;
+
+  transition:
+    width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+    height 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+    top 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+    left 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color 0.3s ease,
+    border-radius 0.3s ease,
+    background 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+/* On hover — square enlarges to wrap the button, STOPS spinning, glows */
+.cursor-root.is-hover .cursor-square {
+  border-color: rgba(79, 70, 229, 0.6);
+  border-radius: 10px;
+  background: rgba(79, 70, 229, 0.04);
+  box-shadow:
+    0 0 18px rgba(79, 70, 229, 0.1),
+    inset 0 0 12px rgba(79, 70, 229, 0.02);
+  animation: none;
+}
+
+/* ---- Keyframes ---- */
+@keyframes spinSquare {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes spinSquareHover {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(-360deg); }
+}
+
+/* ---- Touch / Mobile: hide entirely ---- */
+@media (pointer: coarse) {
+  .cursor-root {
+    display: none !important;
+  }
+  .custom-cursor-active,
+  .custom-cursor-active * {
+    cursor: auto !important;
+  }
+}

@@ -1,5 +1,4 @@
 import apiClient from "./apiClient";
-import { courses } from "../mock/courses";
 
 // Helper to map backend course model to frontend course model
 const mapCourse = (backendCourse) => {
@@ -12,7 +11,9 @@ const mapCourse = (backendCourse) => {
     title: title,
     code: backendCourse.code || (title ? title.split(" ").map(w => w[0]).join("").toUpperCase() : `CSE-${courseId}`),
     branch: backendCourse.branch || (backendCourse.branch_id ? String(backendCourse.branch_id) : "CSE"),
-    semester: String(backendCourse.semester || 1),
+    branchId: backendCourse.branch_id,
+    semesterId: backendCourse.semester_id,
+    semester: backendCourse.semester_name || String(backendCourse.semester_id || 1), // mapping to name (e.g. "Semester 1") for UI compatibility
     teacherId: String(backendCourse.teacher_id || backendCourse.teacherId || ""),
     teacherName: backendCourse.teacher_name || backendCourse.teacherName || "Assigned Faculty",
     progress: backendCourse.progress || 0,
@@ -29,126 +30,98 @@ const mapCourse = (backendCourse) => {
 
 export const courseService = {
   async getCourses(filters = {}) {
-    try {
-      const response = await apiClient.get("/courses");
-      const mapped = response.data.map(mapCourse);
-      // Client-side filtering if needed or if backend returns all
-      return mapped.filter((course) => {
-        const branchMatch = !filters.branch || course.branch === filters.branch;
-        const semesterMatch =
-          !filters.semester || course.semester === String(filters.semester);
-        const teacherMatch = !filters.teacherId || course.teacherId === filters.teacherId;
-        return branchMatch && semesterMatch && teacherMatch;
-      });
-    } catch (error) {
-      console.warn("Backend getCourses failed. Falling back to mock courses.", error);
-      return courses.filter((course) => {
-        const branchMatch = !filters.branch || course.branch === filters.branch;
-        const semesterMatch =
-          !filters.semester || course.semester === String(filters.semester);
-        const teacherMatch = !filters.teacherId || course.teacherId === filters.teacherId;
-        return branchMatch && semesterMatch && teacherMatch;
-      });
-    }
+    const params = {};
+    if (filters.branchId) params.branch_id = Number(filters.branchId);
+    if (filters.semesterId) params.semester_id = Number(filters.semesterId);
+    if (filters.includeArchived) params.include_archived = true;
+
+    const response = await apiClient.get("/courses", { params });
+    const mapped = response.data.map(mapCourse);
+    
+    // Additional client-side filtering if teacherId filter is passed
+    return mapped.filter((course) => {
+      const teacherMatch = !filters.teacherId || String(course.teacherId) === String(filters.teacherId);
+      return teacherMatch;
+    });
   },
 
   async getCourseById(courseId) {
-    try {
-      const response = await apiClient.get(`/courses/${courseId}`);
-      return mapCourse(response.data);
-    } catch (error) {
-      console.warn(`Backend getCourseById for ${courseId} failed. Falling back to mock.`, error);
-      const matched = courses.find((course) => String(course.id) === String(courseId));
-      return matched || null;
-    }
+    const response = await apiClient.get(`/courses/${courseId}`);
+    return mapCourse(response.data);
   },
 
   async createCourse(payload) {
-    try {
-      const response = await apiClient.post("/courses", {
-        title: payload.title,
-        description: payload.description,
-        branch_id: Number(payload.branchId),
-        semester: Number(payload.semester),
-        teacher_id: Number(payload.teacherId),
-      });
-      return mapCourse(response.data);
-    } catch (error) {
-      console.warn("Backend createCourse failed. Falling back to mock response.", error);
-      return { id: `course-${Date.now()}`, ...payload };
-    }
+    const response = await apiClient.post("/courses", {
+      title: payload.title,
+      description: payload.description,
+      branch_id: Number(payload.branchId),
+      semester_id: Number(payload.semesterId),
+      teacher_id: Number(payload.teacherId),
+    });
+    return mapCourse(response.data);
   },
 
   async updateCourse(courseId, payload) {
-    try {
-      const response = await apiClient.put(`/courses/${courseId}`, payload);
-      return mapCourse(response.data);
-    } catch (error) {
-      console.warn(`Backend updateCourse ${courseId} failed. Falling back to mock.`, error);
-      return { id: courseId, ...payload };
-    }
+    const response = await apiClient.put(`/courses/${courseId}`, {
+      title: payload.title,
+      description: payload.description,
+      branch_id: Number(payload.branchId),
+      semester_id: Number(payload.semesterId),
+      teacher_id: Number(payload.teacherId),
+    });
+    return mapCourse(response.data);
+  },
+
+  async assignTeacher(courseId, teacherId) {
+    const response = await apiClient.put(`/courses/${courseId}/assign`, {
+      teacher_id: teacherId ? Number(teacherId) : null
+    });
+    return mapCourse(response.data);
   },
 
   async deleteCourse(courseId) {
-    try {
-      const response = await apiClient.delete(`/courses/${courseId}`);
-      return response.data;
-    } catch (error) {
-      console.warn(`Backend deleteCourse ${courseId} failed. Falling back to mock.`, error);
-      return { message: "deleted" };
-    }
+    const response = await apiClient.delete(`/courses/${courseId}`);
+    return response.data;
+  },
+
+  async archiveCourse(courseId) {
+    const response = await apiClient.post(`/courses/${courseId}/archive`);
+    return response.data;
+  },
+
+  async restoreCourse(courseId) {
+    const response = await apiClient.post(`/courses/${courseId}/restore`);
+    return response.data;
   },
 
   // Modules Sub-resource
   async getModules(courseId) {
-    try {
-      const response = await apiClient.get(`/courses/${courseId}/modules`);
-      return response.data.map((m) => ({
-        ...m,
-        id: String(m.module_id || m.id),
-      }));
-    } catch (error) {
-      console.warn(`Backend getModules for course ${courseId} failed. Falling back to mock.`, error);
-      const matchedCourse = courses.find((c) => String(c.id) === String(courseId));
-      return matchedCourse?.modules || [];
-    }
+    const response = await apiClient.get(`/courses/${courseId}/modules`);
+    return response.data.map((m) => ({
+      ...m,
+      id: String(m.module_id || m.id),
+    }));
   },
 
   async createModule(courseId, payload) {
-    try {
-      const response = await apiClient.post(`/courses/${courseId}/modules`, {
-        title: payload.title,
-        description: payload.description,
-        order_num: Number(payload.orderNum) || 1,
-      });
-      return {
-        ...response.data,
-        id: String(response.data.module_id || response.data.id),
-      };
-    } catch (error) {
-      console.warn(`Backend createModule for course ${courseId} failed. Falling back to mock.`, error);
-      return { id: `mod-${Date.now()}`, ...payload };
-    }
+    const response = await apiClient.post(`/courses/${courseId}/modules`, {
+      title: payload.title,
+      description: payload.description,
+      order_num: Number(payload.orderNum) || 1,
+    });
+    return {
+      ...response.data,
+      id: String(response.data.module_id || response.data.id),
+    };
   },
 
   async updateModule(moduleId, payload) {
-    try {
-      const response = await apiClient.put(`/modules/${moduleId}`, payload);
-      return response.data;
-    } catch (error) {
-      console.warn(`Backend updateModule ${moduleId} failed. Falling back to mock.`, error);
-      return { id: moduleId, ...payload };
-    }
+    const response = await apiClient.put(`/modules/${moduleId}`, payload);
+    return response.data;
   },
 
   async deleteModule(moduleId) {
-    try {
-      const response = await apiClient.delete(`/modules/${moduleId}`);
-      return response.data;
-    } catch (error) {
-      console.warn(`Backend deleteModule ${moduleId} failed. Falling back to mock.`, error);
-      return { message: "deleted" };
-    }
+    const response = await apiClient.delete(`/modules/${moduleId}`);
+    return response.data;
   },
 };
-

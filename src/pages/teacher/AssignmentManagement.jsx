@@ -1,4 +1,4 @@
-import { CheckCircle2, Eye, Plus, Star } from "lucide-react";
+import { CheckCircle2, Download, Eye, Plus, Star, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Badge from "../../components/common/Badge";
 import PageHeader from "../../components/common/PageHeader";
@@ -13,7 +13,7 @@ import styles from "../../styles/ui.module.css";
 
 export default function AssignmentManagement() {
   const { user } = useAuth();
-  const { assignments, courses, students, loading } = useRoleData(user);
+  const { assignments, courses, loading } = useRoleData(user);
   const [createdAssignments, setCreatedAssignments] = useSessionState(
     "lms-teacher-assignments",
     [],
@@ -38,6 +38,10 @@ export default function AssignmentManagement() {
   });
 
   const [submissions, setSubmissions] = useState([]);
+  const [selectedSubmission, setSelectedSubmission] = useState(null);
+  const [gradeForm, setGradeForm] = useState({ marks: "", feedback: "" });
+  const [successMsg, setSuccessMsg] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
 
   // Sync selectedId when data loads
   useEffect(() => {
@@ -55,6 +59,9 @@ export default function AssignmentManagement() {
         const fetched = await assignmentService.getSubmissions(selected.id);
         if (active) {
           setSubmissions(fetched);
+          setSelectedSubmission(null); // Reset active review on assignment switch
+          setSuccessMsg("");
+          setErrorMsg("");
         }
       } catch (err) {
         console.error("Error loading submissions", err);
@@ -81,46 +88,67 @@ export default function AssignmentManagement() {
       maxMarks: Number(form.maxMarks) || 100,
     };
 
-    // Save to backend via service
-    const savedAsg = await assignmentService.createAssignment(course.id, payload);
-
-    setCreatedAssignments((current) => [savedAsg, ...current]);
-    setSelectedId(savedAsg.id);
-    setForm({ courseId: course.id, title: "", instructions: "", dueDate: "", maxMarks: "" });
+    try {
+      const savedAsg = await assignmentService.createAssignment(course.id, payload);
+      setCreatedAssignments((current) => [savedAsg, ...current]);
+      setSelectedId(savedAsg.id);
+      setForm({ courseId: course.id, title: "", instructions: "", dueDate: "", maxMarks: "" });
+      setSuccessMsg("Assignment published successfully!");
+    } catch (err) {
+      console.error("Failed to create assignment", err);
+    }
   };
 
-  const gradeNext = async () => {
-    if (!selected) return;
+  const startReview = (sub) => {
+    setSelectedSubmission(sub);
+    setGradeForm({
+      marks: sub.marks !== null && sub.marks !== undefined ? String(sub.marks) : "",
+      feedback: sub.feedback || "",
+    });
+    setSuccessMsg("");
+    setErrorMsg("");
+  };
 
-    // Find first pending submission
-    const pendingSub = submissions.find((sub) => sub.status === "Pending");
+  const submitGrade = async () => {
+    if (!selectedSubmission) return;
+    if (gradeForm.marks.trim() === "") {
+      setErrorMsg("Please enter a grade score.");
+      return;
+    }
 
-    if (pendingSub) {
-      // Grade using backend service
-      await assignmentService.gradeSubmission(pendingSub.submissionId, 85, "Good implementation");
+    try {
+      await assignmentService.gradeSubmission(
+        selectedSubmission.submissionId,
+        Number(gradeForm.marks),
+        gradeForm.feedback.trim()
+      );
+
       // Update local state
       setSubmissions((current) =>
         current.map((sub) =>
-          sub.submissionId === pendingSub.submissionId
-            ? { ...sub, status: "Graded", marks: 85, feedback: "Good implementation" }
+          sub.submissionId === selectedSubmission.submissionId
+            ? { 
+                ...sub, 
+                status: "Graded", 
+                marks: Number(gradeForm.marks), 
+                feedback: gradeForm.feedback.trim() 
+              }
             : sub
         )
       );
-    } else {
-      // Fallback/Simulated grading if no database submissions exist
-      if (!selected.id.startsWith("session-asg")) return;
-      setCreatedAssignments((current) =>
-        current.map((assignment) =>
-          assignment.id === selected.id
-            ? {
-                ...assignment,
-                submissions: Math.max(assignment.submissions, students.length),
-                graded: Math.min(Math.max(assignment.graded + 1, 1), students.length),
-              }
-            : assignment,
-        ),
-      );
+      setSuccessMsg("Submission graded successfully!");
+      setSelectedSubmission(null);
+    } catch (err) {
+      console.error("Failed to submit grade", err);
+      setErrorMsg("Failed to save grade. Please try again.");
     }
+  };
+
+  // Build the full backend URL for file downloads
+  const getFileUrl = (filePath) => {
+    const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+    const host = apiBase.replace("/api", "");
+    return `${host}${filePath}`;
   };
 
   if (loading) {
@@ -131,7 +159,7 @@ export default function AssignmentManagement() {
     <section className={`${styles.page} ${styles.teacherPage}`}>
       <PageHeader
         title="Assignment Management"
-        subtitle="Create assignments for assigned courses, review submissions, and grade session-created work."
+        subtitle="Create assignments for assigned courses, review student submissions, and grade work in real time."
         action={<button className={styles.button} type="button" onClick={createAssignment}><Plus size={18} /> Publish Assignment</button>}
       />
       <div className={styles.assignmentWorkspace}>
@@ -150,35 +178,58 @@ export default function AssignmentManagement() {
             </form>
           </div>
         </article>
+
         <article className={styles.assignmentDetail}>
-          <div className={styles.panelHeader}><h2 className={styles.panelTitle}>Assignment Review</h2>{selected && <Badge>{selected.courseTitle}</Badge>}</div>
+          <div className={styles.panelHeader}>
+            <h2 className={styles.panelTitle}>Assignment Review</h2>
+            {selected && <Badge>{selected.courseTitle}</Badge>}
+          </div>
           <div className={styles.panelBody}>
+            {successMsg && <div className={styles.successMessage}>{successMsg}</div>}
+            {errorMsg && <div className={styles.alert}>{errorMsg}</div>}
+
             {selected ? (
               <>
                 <h3>{selected.title}</h3>
-                <p className={styles.muted}>{selected.instructions}</p>
-                <div className={styles.detailGrid}>
+                <p className={styles.muted} style={{ marginBottom: "1.5rem" }}>{selected.instructions}</p>
+                <div className={styles.detailGrid} style={{ borderBottom: "1px solid var(--border)", paddingBottom: "1rem" }}>
                   <span><strong>Due:</strong> {formatDate(selected.dueDate)}</span>
-                  <span><strong>Marks:</strong> {selected.maxMarks}</span>
-                  <span><strong>Submissions:</strong> {selected.submissions || 0}</span>
-                  <span><strong>Graded:</strong> {selected.graded || 0}</span>
+                  <span><strong>Max Marks:</strong> {selected.total_marks}</span>
+                  <span><strong>Submissions:</strong> {submissions.length}</span>
                 </div>
-                {submissions.length > 0 && (
-                  <div style={{ marginTop: "1rem" }}>
-                    <h4>Active Submissions ({submissions.length})</h4>
-                    <ul style={{ listStyle: "none", padding: 0 }}>
-                      {submissions.map((sub) => (
-                        <li key={sub.submissionId} style={{ display: "flex", justifyContent: "space-between", padding: "0.4rem 0", borderBottom: "1px solid var(--border)" }}>
-                          <span>{sub.studentName}</span>
-                          <Badge variant={sub.status === "Graded" ? "success" : "warning"}>{sub.status}</Badge>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-                <div className={styles.heroActions}>
-                  <button className={styles.buttonSecondary} type="button"><Eye size={18} /> View submissions</button>
-                  <button className={styles.button} type="button" onClick={gradeNext}><Star size={18} /> Grade next</button>
+
+                <div style={{ marginTop: "1.5rem" }}>
+                  <h4 style={{ marginBottom: "0.8rem" }}>Student Submissions</h4>
+                  {submissions.length > 0 ? (
+                    <div style={{ maxHeight: "220px", overflowY: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                        <thead>
+                          <tr style={{ borderBottom: "1px solid var(--border)", textAlign: "left" }}>
+                            <th style={{ padding: "0.5rem 0" }}>Student</th>
+                            <th>Status</th>
+                            <th>Grade</th>
+                            <th style={{ textAlign: "right" }}>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {submissions.map((sub) => (
+                            <tr key={sub.submissionId} style={{ borderBottom: "1px solid rgba(0,0,0,0.05)" }}>
+                              <td style={{ padding: "0.6rem 0" }}><strong>{sub.studentName}</strong></td>
+                              <td><Badge variant={sub.status === "Graded" ? "success" : "warning"}>{sub.status}</Badge></td>
+                              <td>{sub.status === "Graded" ? `${sub.marks}/${selected.total_marks}` : "-"}</td>
+                              <td style={{ textAlign: "right" }}>
+                                <button className={styles.buttonSecondary} style={{ padding: "0.2rem 0.6rem", fontSize: "0.85rem" }} type="button" onClick={() => startReview(sub)}>
+                                  Review
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <p className={styles.muted} style={{ fontSize: "0.95rem" }}>No students have submitted work for this assignment yet.</p>
+                  )}
                 </div>
               </>
             ) : (
@@ -187,18 +238,73 @@ export default function AssignmentManagement() {
           </div>
         </article>
       </div>
+
+      {selectedSubmission && (
+        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 }}>
+          <article className={styles.panel} style={{ width: "90%", maxWidth: "500px", position: "relative", boxShadow: "var(--shadow-lg)" }}>
+            <button style={{ position: "absolute", top: "1rem", right: "1rem", background: "none", border: "none", cursor: "pointer" }} onClick={() => setSelectedSubmission(null)}>
+              <X size={20} />
+            </button>
+            <div className={styles.panelHeader}>
+              <h2 className={styles.panelTitle}>Review Submission</h2>
+            </div>
+            <div className={styles.panelBody} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              <p><strong>Student:</strong> {selectedSubmission.studentName}</p>
+              
+              <div style={{ display: "flex", alignItems: "center", gap: "0.8rem", padding: "0.8rem", backgroundColor: "var(--surface-variant)", borderRadius: "var(--radius-md)" }}>
+                <Eye size={20} />
+                <div style={{ flex: 1, overflow: "hidden" }}>
+                  <strong style={{ display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Submitted File</strong>
+                  <small className={styles.muted}>Click download to inspect file</small>
+                </div>
+                <a href={getFileUrl(selectedSubmission.file_path)} target="_blank" rel="noopener noreferrer" className={styles.button} style={{ textDecoration: "none", display: "flex", gap: "0.4rem", padding: "0.4rem 0.8rem", fontSize: "0.9rem" }}>
+                  <Download size={15} /> Download
+                </a>
+              </div>
+
+              <div className={styles.form} style={{ marginTop: "0.5rem" }}>
+                <TextField 
+                  label={`Score (Max: ${selected.total_marks})`}
+                  name="marks"
+                  type="number"
+                  placeholder="Enter points"
+                  value={gradeForm.marks}
+                  onChange={(e) => setGradeForm(prev => ({ ...prev, marks: e.target.value }))}
+                />
+                <TextField 
+                  label="Feedback Comments"
+                  name="feedback"
+                  as="textarea"
+                  placeholder="Good work! Provide comments here..."
+                  value={gradeForm.feedback}
+                  onChange={(e) => setGradeForm(prev => ({ ...prev, feedback: e.target.value }))}
+                />
+                <div style={{ display: "flex", gap: "0.8rem", marginTop: "0.5rem" }}>
+                  <button className={styles.button} type="button" style={{ flex: 1 }} onClick={submitGrade}>
+                    <Star size={16} /> Submit Grade
+                  </button>
+                  <button className={styles.buttonSecondary} type="button" onClick={() => setSelectedSubmission(null)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      )}
+
       <div className={styles.gradeGrid}>
         {rows.map((assignment) => (
           <button className={styles.gradeCard} key={assignment.id} type="button" onClick={() => setSelectedId(assignment.id)}>
             <div className={styles.quizTop}>
               <span className={styles.iconBox}><CheckCircle2 size={18} /></span>
-              <Badge variant={assignment.id.startsWith("session") ? "success" : undefined}>{assignment.id.startsWith("session") ? "Session" : "Mock"}</Badge>
+              <Badge variant={assignment.id.startsWith("session") ? "success" : undefined}>{assignment.id.startsWith("session") ? "Session" : "Live"}</Badge>
             </div>
             <h3>{assignment.title}</h3>
             <p>{assignment.courseTitle}</p>
             <div className={styles.detailGrid}>
               <span><strong>Due:</strong> {formatDate(assignment.dueDate)}</span>
-              <span><strong>Pending:</strong> {Math.max((assignment.submissions || 0) - (assignment.graded || 0), 0)}</span>
+              <span><strong>Pending:</strong> {assignment.submissions || 0} submissions</span>
             </div>
           </button>
         ))}
@@ -206,4 +312,3 @@ export default function AssignmentManagement() {
     </section>
   );
 }
-

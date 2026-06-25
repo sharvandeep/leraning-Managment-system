@@ -8,6 +8,8 @@ import RoleRedirect from "./routes/RoleRedirect.jsx";
 import LoginPage from "./pages/auth/LoginPage.jsx";
 import RegisterPage from "./pages/auth/RegisterPage.jsx";
 import ForgotPasswordPage from "./pages/auth/ForgotPasswordPage.jsx";
+import ResetPasswordPage from "./pages/auth/ResetPasswordPage.jsx";
+import VerifyEmailPage from "./pages/auth/VerifyEmailPage.jsx";
 import StudentDashboard from "./pages/student/Dashboard.jsx";
 import MyCourses from "./pages/student/MyCourses.jsx";
 import CourseDetails from "./pages/student/CourseDetails.jsx";
@@ -23,6 +25,7 @@ import MaterialUpload from "./pages/teacher/MaterialUpload.jsx";
 import AssignmentManagement from "./pages/teacher/AssignmentManagement.jsx";
 import QuizManagement from "./pages/teacher/QuizManagement.jsx";
 import StudentPerformance from "./pages/teacher/StudentPerformance.jsx";
+import AttendanceManagement from "./pages/teacher/AttendanceManagement.jsx";
 import TeacherProfile from "./pages/teacher/Profile.jsx";
 import AdminDashboard from "./pages/admin/Dashboard.jsx";
 import UserManagement from "./pages/admin/UserManagement.jsx";
@@ -39,6 +42,8 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
       </Route>
 
       <Route element={<ProtectedRoute allowedRoles={["student"]} />}>
@@ -64,6 +69,7 @@ export default function App() {
           <Route path="materials" element={<MaterialUpload />} />
           <Route path="assignments" element={<AssignmentManagement />} />
           <Route path="quizzes" element={<QuizManagement />} />
+          <Route path="attendance" element={<AttendanceManagement />} />
           <Route path="performance" element={<StudentPerformance />} />
           <Route path="profile" element={<TeacherProfile />} />
         </Route>

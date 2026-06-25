@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookOpen, CheckCircle2, ClipboardList, FileText, PenLine, PlayCircle } from "lucide-react";
+import { BookOpen, ClipboardList, FileText, PenLine, Star, MessageSquare, Send, Award, CheckCircle } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/tables/DataTable";
@@ -8,45 +8,64 @@ import ProgressBar from "../../components/common/ProgressBar";
 import { courseService } from "../../services/courseService";
 import { assignmentService } from "../../services/assignmentService";
 import { quizService } from "../../services/quizService";
-import { courses as mockCourses } from "../../mock/courses";
-import { assignments as mockAssignments } from "../../mock/assignments";
-import { quizzes as mockQuizzes } from "../../mock/quizzes";
-import { grades as mockGrades } from "../../mock/grades";
+import { studyTrackingService } from "../../services/studyTrackingService";
+import { discussionService } from "../../services/discussionService";
 import { formatDate } from "../../utils/formatters";
 import styles from "../../styles/ui.module.css";
 
 export default function CourseDetails() {
   const { courseId } = useParams();
   const [course, setCourse] = useState(null);
-  const [rows, setRows] = useState([]);
-  const [quizRows, setQuizRows] = useState([]);
-  const [gradeRows, setGradeRows] = useState([]);
+  const [assignments, setAssignments] = useState([]);
+  const [quizzes, setQuizzes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  
+  // Custom states for tracking, bookmarks, and forums
+  const [starredModules, setStarredModules] = useState({});
+  const [forumPosts, setForumPosts] = useState([]);
+  const [replyText, setReplyText] = useState({});
+  const [submitLoading, setSubmitLoading] = useState(false);
 
   useEffect(() => {
     let active = true;
     async function loadData() {
       try {
-        const fetchedCourse = await courseService.getCourseById(courseId);
-        const fetchedAssignments = await assignmentService.getAssignments([courseId]);
-        const fetchedQuizzes = await quizService.getQuizzes([courseId]);
-        const fetchedGrades = mockGrades.filter((item) => String(item.courseId) === String(courseId));
+        const [fetchedCourse, fetchedAssignments, fetchedQuizzes] = await Promise.all([
+          courseService.getCourseById(courseId),
+          assignmentService.getAssignments([courseId]),
+          quizService.getQuizzes([courseId]),
+        ]);
 
         if (active) {
           setCourse(fetchedCourse);
-          setRows(fetchedAssignments);
-          setQuizRows(fetchedQuizzes);
-          setGradeRows(fetchedGrades);
+          setAssignments(fetchedAssignments);
+          setQuizzes(fetchedQuizzes);
+        }
+
+        // Parallel fetch for workspace bookmarks and classroom discussion board
+        const [bookmarksList, discussionsList] = await Promise.all([
+          studyTrackingService.getBookmarks().catch(() => []),
+          discussionService.getDiscussions(courseId).catch(() => [])
+        ]);
+
+        if (active) {
+          // Map starred modules to quickly lookup by ID
+          const starredMap = {};
+          bookmarksList.forEach(b => {
+            starredMap[b.module_id] = true;
+          });
+          setStarredModules(starredMap);
+          setForumPosts(discussionsList);
           setLoading(false);
         }
+
+        // Log that the course was recently viewed (workspace path)
+        await studyTrackingService.logRecentlyViewed(courseId).catch(() => {});
       } catch (err) {
-        console.error("Failed loading course details, falling back to mock data", err);
-        const matchedCourse = mockCourses.find((item) => String(item.id) === String(courseId));
+        console.error("Failed loading course details from database", err);
         if (active) {
-          setCourse(matchedCourse || null);
-          setRows(mockAssignments.filter((item) => String(item.courseId) === String(courseId)));
-          setQuizRows(mockQuizzes.filter((item) => String(item.courseId) === String(courseId)));
-          setGradeRows(mockGrades.filter((item) => String(item.courseId) === String(courseId)));
+          setError("Failed to load course details. Please try again later.");
           setLoading(false);
         }
       }
@@ -57,33 +76,84 @@ export default function CourseDetails() {
     };
   }, [courseId]);
 
-  const completedLessons =
-    course?.modules?.flatMap((module) => module.lessons || []).filter((lesson) => lesson.completed)
-      .length || 0;
-  const totalLessons = course?.modules?.flatMap((module) => module.lessons || []).length || 0;
-
   if (loading) {
     return <PageHeader title="Loading..." subtitle="Fetching course details..." />;
   }
 
-  if (!course) {
-    return <PageHeader title="Course not found" subtitle="The selected course could not be loaded." />;
+  if (error || !course) {
+    return <PageHeader title="Course not found" subtitle={error || "The selected course could not be loaded."} />;
   }
+
+  const totalMaterials = course.modules?.reduce((sum, m) => sum + (m.materials?.length || 0), 0) || 0;
+
+  // Toggle starring a module
+  const handleToggleStar = async (moduleId) => {
+    try {
+      const res = await studyTrackingService.toggleBookmark(moduleId);
+      setStarredModules(prev => ({
+        ...prev,
+        [moduleId]: res.starred
+      }));
+    } catch (err) {
+      console.error("Failed to toggle module bookmark", err);
+    }
+  };
+
+  // Intercept file clicks to log downloads
+  const handleMaterialDownload = async (materialId) => {
+    try {
+      await studyTrackingService.logDownload(materialId);
+    } catch (err) {
+      console.error("Failed to record material download log", err);
+    }
+  };
+
+  // Submit classroom discussion reply
+  const handleReplySubmit = async (postId, event) => {
+    if (event) event.preventDefault();
+    const content = replyText[postId];
+    if (!content || !content.trim()) return;
+
+    setSubmitLoading(true);
+    try {
+      const newReply = await discussionService.createReply(postId, { content });
+      setForumPosts(prevPosts => prevPosts.map(post => {
+        if (post.id === postId) {
+          return {
+            ...post,
+            replies: [...(post.replies || []), newReply]
+          };
+        }
+        return post;
+      }));
+      setReplyText(prev => ({ ...prev, [postId]: "" }));
+      setSubmitLoading(false);
+    } catch (err) {
+      console.error("Failed to submit classroom reply", err);
+      setSubmitLoading(false);
+    }
+  };
+
+  const handleReplyChange = (postId, value) => {
+    setReplyText(prev => ({ ...prev, [postId]: value }));
+  };
 
   return (
     <section className={styles.page}>
       <PageHeader title={course.title} subtitle={course.description} />
-      <section className={styles.courseDetailHero}>
+      
+      <section className={styles.courseDetailHero} style={{ background: "linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)", border: "1px solid #cbd5e1" }}>
         <div>
           <div className={styles.courseMeta}>
             <Badge>{course.code}</Badge>
             <Badge>{course.branch}</Badge>
-            <Badge>Semester {course.semester}</Badge>
+            <Badge>{course.semester}</Badge>
+            {course.is_archived && <Badge variant="warning">Archived</Badge>}
           </div>
           <h2>{course.title}</h2>
           <p>{course.description}</p>
           <div className={styles.heroActions}>
-            <Link className={styles.button} to="/student/assignments">
+            <Link className={styles.button} style={{ backgroundColor: "#0284c7" }} to="/student/assignments">
               Assignments <ClipboardList size={17} />
             </Link>
             <Link className={styles.buttonSecondary} to="/student/quizzes">
@@ -91,127 +161,303 @@ export default function CourseDetails() {
             </Link>
           </div>
         </div>
-        <aside>
-          <ProgressBar label="Course progress" value={course.progress} />
-          <div className={styles.heroMetricGrid}>
-            <div>
-              <strong>{completedLessons}/{totalLessons}</strong>
-              <span>Admin lessons</span>
+        <aside style={{ backgroundColor: "white", padding: "20px", borderRadius: "12px", border: "1px solid #e2e8f0" }}>
+          {/* Detailed Course Tracker breakdown in the hero panel! */}
+          <ProgressBar label="Overall course progress" value={course.progress} />
+          
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px", marginTop: "16px", textAlign: "center" }}>
+            <div style={{ padding: "6px", backgroundColor: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+              <strong style={{ display: "block", fontSize: "14px", color: "#0f172a" }}>{course.modules_completed} / {course.modules_total}</strong>
+              <span style={{ fontSize: "10px", color: "#64748b" }}>Modules Done</span>
             </div>
-            <div>
-              <strong>{course.materialsList.length}</strong>
-              <span>Teacher files</span>
+            <div style={{ padding: "6px", backgroundColor: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
+              <strong style={{ display: "block", fontSize: "14px", color: "#0f172a" }}>{course.attendance_percentage || 100}%</strong>
+              <span style={{ fontSize: "10px", color: "#64748b" }}>Attendance</span>
             </div>
           </div>
         </aside>
       </section>
+
       <div className={styles.grid2}>
         <article className={styles.panel}>
           <div className={styles.panelHeader}><h2 className={styles.panelTitle}>Course Overview</h2></div>
           <div className={styles.panelBody}>
-            <p><strong>Teacher:</strong> {course.teacherName}</p>
-            <p><strong>Code:</strong> {course.code}</p>
-            <p><strong>Last updated:</strong> {formatDate(course.updatedAt)}</p>
-            <p><strong>Total learning time:</strong> {course.totalHours} hours</p>
+            <p style={{ margin: "8px 0" }}><strong>Assigned Faculty:</strong> {course.teacherName}</p>
+            <p style={{ margin: "8px 0" }}><strong>Course Code:</strong> {course.code}</p>
+            <p style={{ margin: "8px 0" }}><strong>Branch:</strong> {course.branch}</p>
+            <p style={{ margin: "8px 0" }}><strong>Semester Mapping:</strong> {course.semester}</p>
           </div>
         </article>
         <article className={styles.panel}>
           <div className={styles.panelHeader}><h2 className={styles.panelTitle}>Content Summary</h2></div>
           <div className={styles.panelBody}>
-            <p>{course.lessons} lessons</p>
-            <p>{course.materials} uploaded materials</p>
-            <p>{quizRows.length} quizzes configured</p>
+            <p style={{ margin: "8px 0" }}><strong>Modules Mapped:</strong> {course.modules?.length || 0}</p>
+            <p style={{ margin: "8px 0" }}><strong>Total Materials:</strong> {totalMaterials} files uploaded</p>
+            <p style={{ margin: "8px 0" }}><strong>Active Quizzes:</strong> {quizzes.length}</p>
+            <p style={{ margin: "8px 0" }}><strong>Assignments:</strong> {assignments.length}</p>
           </div>
         </article>
       </div>
+
+      {/* Syllabus, Bookmarks & Downloads */}
       <article className={styles.panel}>
-        <div className={styles.panelHeader}><h2 className={styles.panelTitle}>Admin-Created Lessons</h2></div>
+        <div className={styles.panelHeader}><h2 className={styles.panelTitle}>Course Syllabus & Materials</h2></div>
         <div className={styles.panelBody}>
-          <div className={styles.moduleList}>
-            {course.modules.map((module) => (
-              <section className={styles.moduleCard} key={module.id}>
-                <div>
-                  <Badge>{module.createdBy}</Badge>
-                  <h3>{module.title}</h3>
-                </div>
-                <div className={styles.lessonList}>
-                  {module.lessons.map((lesson) => (
-                    <button className={styles.lessonItem} key={lesson.id} type="button">
-                      {lesson.completed ? <CheckCircle2 size={18} /> : <PlayCircle size={18} />}
-                      <span>
-                        <strong>{lesson.title}</strong>
-                        <small>{lesson.duration}</small>
+          {(!course.modules || course.modules.length === 0) ? (
+            <p className={styles.muted}>No modules or learning content have been configured for this course yet.</p>
+          ) : (
+            <div className={styles.moduleList} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              {course.modules.map((module) => {
+                const isStarred = starredModules[module.module_id || module.id];
+                return (
+                  <section className={styles.moduleCard} key={module.id || module.module_id} style={{ border: '1px solid #cbd5e1', borderRadius: '12px', padding: '20px', backgroundColor: 'white' }}>
+                    <div style={{ marginBottom: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <div>
+                        <h3 style={{ fontSize: '18px', fontWeight: 'bold', color: '#0f172a', margin: '0 0 4px 0' }}>{module.title}</h3>
+                        {module.description && <p style={{ fontSize: '14px', color: '#475569', margin: '0' }}>{module.description}</p>}
+                      </div>
+                      
+                      {/* Star Bookmark Icon Toggle */}
+                      <button 
+                        onClick={() => handleToggleStar(module.module_id || module.id)}
+                        style={{ background: "none", border: "none", cursor: "pointer", padding: "4px", color: isStarred ? "#eab308" : "#94a3b8", display: "flex", alignItems: "center" }}
+                        title={isStarred ? "Starred module" : "Star module"}
+                      >
+                        <Star size={20} fill={isStarred ? "#eab308" : "none"} />
+                      </button>
+                    </div>
+                    
+                    <div className={styles.lessonList} style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {(!module.materials || module.materials.length === 0) ? (
+                        <p style={{ fontSize: '13px', color: '#9ca3af', margin: '0', paddingLeft: '4px' }}>No study materials uploaded for this module.</p>
+                      ) : (
+                        module.materials.map((material) => {
+                          const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+                          const rootBaseUrl = apiBaseUrl.replace(/\/api$/, "");
+                          const fullFilePath = material.file_path.startsWith("http") 
+                            ? material.file_path 
+                            : `${rootBaseUrl}${material.file_path}`;
+                          return (
+                            <a 
+                              className={styles.lessonItem} 
+                              key={material.material_id || material.id} 
+                              href={fullFilePath} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              onClick={() => handleMaterialDownload(material.material_id || material.id)}
+                              style={{ 
+                                textDecoration: 'none', 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                justifyContent: 'space-between',
+                                padding: '12px 16px',
+                                background: '#f8fafc',
+                                borderRadius: '8px',
+                                border: '1px solid #e2e8f0',
+                                transition: "all 0.2s"
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <FileText size={18} style={{ color: '#0284c7' }} />
+                                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                  <strong style={{ fontSize: '14px', color: '#1e293b' }}>{material.title}</strong>
+                                  <small style={{ fontSize: '11px', color: '#64748b' }}>{material.file_type || "document"}</small>
+                                </div>
+                              </div>
+                              <Badge variant="success">Open File</Badge>
+                            </a>
+                          );
+                        })
+                      )}
+                    </div>
+                  </section>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </article>
+
+      {/* Classroom Discussion Forum Segment */}
+      <article className={styles.panel} style={{ border: "1px solid #bae6fd", boxShadow: "0 4px 6px -1px rgba(0,0,0,0.05)" }}>
+        <div className={styles.panelHeader} style={{ backgroundColor: "#f0f9ff", borderBottom: "1px solid #bae6fd" }}>
+          <h2 className={styles.panelTitle} style={{ display: "flex", alignItems: "center", gap: "8px", color: "#0369a1" }}>
+            <MessageSquare size={18} /> Classroom Discussion Forum
+          </h2>
+        </div>
+        <div className={styles.panelBody} style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+          {forumPosts.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "30px", color: "#64748b" }}>
+              <MessageSquare size={36} style={{ color: "#cbd5e1", marginBottom: "8px" }} />
+              <p style={{ margin: "0", fontSize: "14px" }}>No discussions started yet. Announcements posted by your teacher will appear here.</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+              {forumPosts.map((post) => (
+                <div key={post.id} style={{ 
+                  backgroundColor: "white", 
+                  border: "1px solid", 
+                  borderColor: post.is_announcement ? "#bae6fd" : "#e2e8f0", 
+                  borderRadius: "12px", 
+                  padding: "20px",
+                  boxShadow: post.is_announcement ? "0 4px 12px rgba(2, 132, 199, 0.05)" : "none"
+                }}>
+                  {/* Post Header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <div style={{ 
+                        width: "36px", 
+                        height: "36px", 
+                        borderRadius: "50%", 
+                        backgroundColor: post.is_announcement ? "#e0f2fe" : "#f1f5f9", 
+                        color: post.is_announcement ? "#0369a1" : "#475569", 
+                        display: "flex", 
+                        alignItems: "center", 
+                        justifyContent: "center", 
+                        fontWeight: "700",
+                        fontSize: "14px"
+                      }}>
+                        {post.user_name[0]}
+                      </div>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <strong style={{ fontSize: "14px", color: "#0f172a" }}>{post.user_name}</strong>
+                          <span style={{ 
+                            backgroundColor: post.is_announcement ? "#bae6fd" : "#e2e8f0", 
+                            color: post.is_announcement ? "#0369a1" : "#475569", 
+                            padding: "2px 6px", 
+                            borderRadius: "4px", 
+                            fontSize: "10px", 
+                            fontWeight: "700" 
+                          }}>{post.user_role.toUpperCase()}</span>
+                        </div>
+                        <small style={{ color: "#94a3b8", fontSize: "11px" }}>{formatDate(post.created_at)}</small>
+                      </div>
+                    </div>
+                    {post.is_announcement && (
+                      <span style={{ display: "flex", alignItems: "center", gap: "4px", backgroundColor: "#e0f2fe", color: "#0369a1", padding: "4px 8px", borderRadius: "6px", fontSize: "11px", fontWeight: "700" }}>
+                        <Award size={12} /> Official Announcement
                       </span>
-                      <Badge variant={lesson.completed ? "success" : "warning"}>
-                        {lesson.completed ? "Completed" : "Start"}
-                      </Badge>
-                    </button>
-                  ))}
+                    )}
+                  </div>
+
+                  {/* Post Body */}
+                  <strong style={{ display: "block", fontSize: "15px", color: "#0f172a", marginBottom: "6px" }}>{post.title}</strong>
+                  <p style={{ fontSize: "14px", color: "#334155", lineHeight: "1.6", margin: "0 0 16px 0" }}>{post.content}</p>
+
+                  {/* Replies Section */}
+                  <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                    {post.replies && post.replies.map((reply) => (
+                      <div key={reply.id} style={{ display: "flex", gap: "10px", paddingLeft: "12px" }}>
+                        <div style={{ 
+                          width: "28px", 
+                          height: "28px", 
+                          borderRadius: "50%", 
+                          backgroundColor: reply.user_role === "teacher" ? "#e0f2fe" : "#f8fafc", 
+                          color: reply.user_role === "teacher" ? "#0369a1" : "#475569", 
+                          display: "flex", 
+                          alignItems: "center", 
+                          justifyContent: "center", 
+                          fontWeight: "700",
+                          fontSize: "12px",
+                          border: "1px solid #e2e8f0"
+                        }}>
+                          {reply.user_name[0]}
+                        </div>
+                        <div style={{ backgroundColor: "#f8fafc", borderRadius: "8px", padding: "8px 12px", flex: "1", border: "1px solid #e2e8f0" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
+                            <strong style={{ fontSize: "12px", color: "#1e293b" }}>{reply.user_name} <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: "500" }}>({reply.user_role})</span></strong>
+                            <small style={{ color: "#94a3b8", fontSize: "10px" }}>{formatShortDate(reply.created_at)}</small>
+                          </div>
+                          <p style={{ fontSize: "13px", color: "#334155", margin: "0" }}>{reply.content}</p>
+                        </div>
+                      </div>
+                    ))}
+
+                    {/* Reply Input Box */}
+                    <form onSubmit={(e) => handleReplySubmit(post.id, e)} style={{ display: "flex", gap: "8px", marginTop: "8px", paddingLeft: "12px" }}>
+                      <input 
+                        type="text" 
+                        placeholder="Write a reply..."
+                        value={replyText[post.id] || ""}
+                        onChange={(e) => handleReplyChange(post.id, e.target.value)}
+                        required
+                        style={{ 
+                          flex: "1", 
+                          padding: "8px 12px", 
+                          border: "1px solid #cbd5e1", 
+                          borderRadius: "6px", 
+                          fontSize: "13px", 
+                          outline: "none" 
+                        }}
+                      />
+                      <button 
+                        type="submit" 
+                        disabled={submitLoading}
+                        style={{ 
+                          backgroundColor: "#0284c7", 
+                          color: "white", 
+                          border: "none", 
+                          borderRadius: "6px", 
+                          width: "36px", 
+                          height: "36px", 
+                          display: "flex", 
+                          alignItems: "center", 
+                          justifyContent: "center", 
+                          cursor: "pointer",
+                          opacity: submitLoading ? 0.5 : 1
+                        }}
+                      >
+                        <Send size={14} />
+                      </button>
+                    </form>
+                  </div>
                 </div>
-              </section>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </article>
-      <article className={styles.panel}>
-        <div className={styles.panelHeader}><h2 className={styles.panelTitle}>Teacher Materials</h2></div>
-        <div className={styles.panelBody}>
-          <div className={styles.materialGrid}>
-            {course.materialsList.map((material) => (
-              <button className={styles.materialCard} key={material.id} type="button">
-                <span className={styles.iconBox}><FileText size={19} /></span>
-                <strong>{material.title}</strong>
-                <small>{material.type} by {material.uploadedBy}</small>
-                <small>{formatDate(material.uploadedAt)}</small>
-              </button>
-            ))}
-          </div>
-        </div>
-      </article>
+
       <article className={styles.panel}>
         <div className={styles.panelHeader}><h2 className={styles.panelTitle}>Assignments</h2></div>
         <div className={styles.panelBody}>
-          <DataTable
-            columns={[
-              { key: "title", label: "Assignment" },
-              { key: "createdBy", label: "Teacher" },
-              { key: "dueDate", label: "Due Date", render: (row) => formatDate(row.dueDate) },
-              { key: "studentStatus", label: "Your Status" },
-              { key: "maxMarks", label: "Marks", render: (row) => row.grade ? `${row.grade}/${row.maxMarks}` : row.maxMarks },
-            ]}
-            rows={rows}
-          />
+          {assignments.length === 0 ? (
+            <p className={styles.muted}>No assignments assigned for this course.</p>
+          ) : (
+            <DataTable
+              columns={[
+                { key: "title", label: "Assignment" },
+                { key: "instructions", label: "Instructions" },
+                { key: "dueDate", label: "Due Date", render: (row) => formatDate(row.dueDate) },
+                { key: "status", label: "Status", render: (row) => <Badge>{row.status}</Badge> },
+                { key: "maxMarks", label: "Marks", render: (row) => row.grade ? `${row.grade}/${row.maxMarks}` : row.maxMarks },
+              ]}
+              rows={assignments}
+            />
+          )}
         </div>
       </article>
-      <div className={styles.grid2}>
-        <article className={styles.panel}>
-          <div className={styles.panelHeader}><h2 className={styles.panelTitle}>Quizzes</h2></div>
-          <div className={styles.panelBody}>
+
+      <article className={styles.panel}>
+        <div className={styles.panelHeader}><h2 className={styles.panelTitle}>Course Quizzes</h2></div>
+        <div className={styles.panelBody}>
+          {quizzes.length === 0 ? (
+            <p className={styles.muted}>No quizzes configured for this course.</p>
+          ) : (
             <DataTable
               columns={[
                 { key: "title", label: "Quiz" },
-                { key: "date", label: "Date", render: (row) => formatDate(row.date) },
-                { key: "studentStatus", label: "Status" },
-                { key: "score", label: "Score", render: (row) => row.score ? `${row.score}/${row.maxScore}` : "-" },
+                { key: "duration", label: "Duration" },
+                { key: "attempts", label: "Attempts Allowed" },
+                { key: "studentStatus", label: "Status", render: (row) => <Badge>{row.studentStatus}</Badge> },
+                { key: "score", label: "Score", render: (row) => row.score !== null ? `${row.score}/${row.maxScore}` : "-" },
               ]}
-              rows={quizRows}
+              rows={quizzes}
             />
-          </div>
-        </article>
-        <article className={styles.panel}>
-          <div className={styles.panelHeader}><h2 className={styles.panelTitle}>Published Grades</h2></div>
-          <div className={styles.panelBody}>
-            <DataTable
-              columns={[
-                { key: "assessment", label: "Assessment" },
-                { key: "type", label: "Type" },
-                { key: "score", label: "Score", render: (row) => `${row.score}/${row.maxScore}` },
-              ]}
-              rows={gradeRows}
-            />
-          </div>
-        </article>
-      </div>
+          )}
+        </div>
+      </article>
     </section>
   );
 }

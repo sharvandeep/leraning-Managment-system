@@ -563,14 +563,11 @@
   gap: 1rem;
   min-height: 330px;
   padding: clamp(1.2rem, 3vw, 2rem);
-  border: 1px solid rgba(148, 163, 184, 0.34);
-  border-radius: 8px;
-  color: #f8fafc;
-  background:
-    linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(30, 64, 175, 0.78)),
-    url("https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1600&q=80")
-      center/cover;
-  box-shadow: 0 26px 64px rgba(15, 23, 42, 0.18);
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: 12px;
+  color: var(--text);
+  background: linear-gradient(135deg, #eef2ff, #f5f3ff, #ecfdf5);
+  box-shadow: 0 10px 30px rgba(99, 102, 241, 0.05);
 }
 
 .studentHeroContent,
@@ -593,12 +590,13 @@
   margin: 0;
   font-size: clamp(2rem, 4vw, 4.1rem);
   line-height: 1;
+  color: var(--text);
 }
 
 .studentHeroContent p {
   max-width: 660px;
   margin: 0;
-  color: rgba(248, 250, 252, 0.82);
+  color: var(--muted);
   font-size: 1.02rem;
   line-height: 1.65;
 }
@@ -617,15 +615,15 @@
   gap: 1.1rem;
   min-width: 0;
   padding: 1.1rem;
-  border: 1px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid rgba(99, 102, 241, 0.15);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.13);
-  box-shadow: 0 22px 46px rgba(2, 6, 23, 0.24);
+  background: rgba(255, 255, 255, 0.45);
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.03);
   backdrop-filter: blur(16px);
 }
 
 .studentHeroPanel .progressRow {
-  color: rgba(255, 255, 255, 0.86);
+  color: var(--text);
 }
 
 .profileChip {
@@ -642,8 +640,8 @@
   height: 3rem;
   place-items: center;
   border-radius: 999px;
-  color: #0f172a;
-  background: #ffffff;
+  color: #ffffff;
+  background: var(--brand);
   font-weight: 950;
 }
 
@@ -663,7 +661,7 @@
 }
 
 .profileChip small {
-  color: rgba(255, 255, 255, 0.74);
+  color: var(--muted);
 }
 
 .heroMetricGrid {
@@ -677,17 +675,18 @@
   gap: 0.1rem;
   min-height: 5rem;
   padding: 0.8rem;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(99, 102, 241, 0.1);
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.45);
 }
 
 .heroMetricGrid strong {
   font-size: 1.65rem;
+  color: var(--text);
 }
 
 .heroMetricGrid span {
-  color: rgba(255, 255, 255, 0.74);
+  color: var(--muted);
   font-size: 0.82rem;
   font-weight: 750;
 }
@@ -1130,7 +1129,7 @@
   gap: 1rem;
 }
 
-.teacherCommandGrid > div {
+.teacherCommandGrid > a {
   display: grid;
   gap: 0.3rem;
   min-height: 7rem;
@@ -1142,20 +1141,30 @@
   align-content: center;
   justify-items: center;
   text-align: center;
+  text-decoration: none;
+  color: var(--text);
+  transition: all 0.2s ease;
 }
 
-.teacherCommandGrid > div > svg {
+.teacherCommandGrid > a:hover {
+  border-color: #9fbcf0;
+  box-shadow: 0 20px 40px rgba(37, 99, 235, 0.15);
+  transform: translateY(-2px);
+}
+
+.teacherCommandGrid > a > svg {
   color: var(--brand);
 }
 
-.teacherCommandGrid > div > strong {
-  font-size: 1.65rem;
+.teacherCommandGrid > a > strong {
+  font-size: 1.15rem;
+  color: var(--text);
 }
 
-.teacherCommandGrid > div > span {
+.teacherCommandGrid > a > span {
   color: var(--muted);
-  font-size: 0.86rem;
-  font-weight: 750;
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .quizTop {
@@ -1380,4 +1389,118 @@
     align-items: flex-start;
     flex-direction: column;
   }
+}
+
+/* Premium Light Glassmorphic Theme Overrides for Teacher & Course Content */
+.teacherCourseTabs {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+.teacherCourseTabs::-webkit-scrollbar {
+  height: 4px;
+}
+.teacherCourseTabs::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.1);
+  border-radius: 4px;
+}
+
+.teacherTab {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.6) !important;
+  border: 1px solid rgba(99, 102, 241, 0.1) !important;
+  padding: 12px 20px;
+  border-radius: 12px;
+  color: var(--muted) !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 160px;
+}
+.teacherTab:hover {
+  background: rgba(99, 102, 241, 0.05) !important;
+  border-color: rgba(99, 102, 241, 0.2) !important;
+  color: var(--brand) !important;
+}
+.teacherTab strong {
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.teacherTab span {
+  font-size: 12px;
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+.teacherTabActive {
+  background: linear-gradient(135deg, var(--brand-soft), #f5f3ff) !important;
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  color: var(--brand) !important;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.08) !important;
+}
+
+.courseDetailHero {
+  background: linear-gradient(135deg, #e0e7ff, #f5f3ff) !important;
+  border: 1px solid rgba(99, 102, 241, 0.15) !important;
+  box-shadow: 0 10px 25px rgba(99, 102, 241, 0.05) !important;
+  color: var(--text) !important;
+  border-radius: 16px !important;
+  margin-bottom: 24px;
+}
+.courseDetailHero h2 {
+  color: var(--text) !important;
+}
+.courseDetailHero p {
+  color: var(--muted) !important;
+}
+
+.moduleCard {
+  background: #ffffff !important;
+  border: 1px solid var(--line) !important;
+  color: var(--text) !important;
+  border-radius: 12px !important;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02) !important;
+}
+.moduleCard h3 {
+  color: var(--text) !important;
+}
+
+.lessonItem {
+  background: var(--panel-soft) !important;
+  border: 1px solid var(--line) !important;
+  color: var(--text) !important;
+  border-radius: 8px !important;
+  cursor: pointer;
+  transition: all 0.2s ease !important;
+}
+.lessonItem:hover {
+  background: rgba(99, 102, 241, 0.05) !important;
+  border-color: rgba(99, 102, 241, 0.2) !important;
+}
+.lessonItem span {
+  color: var(--text) !important;
+}
+.lessonItem small {
+  color: var(--muted) !important;
+}
+
+.materialCard {
+  background: #ffffff !important;
+  border: 1px solid var(--line) !important;
+  color: var(--text) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02) !important;
+}
+.materialCard strong {
+  color: var(--text) !important;
+}
+.materialCard small {
+  color: var(--muted) !important;
 }

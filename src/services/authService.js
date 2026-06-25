@@ -1,135 +1,112 @@
 import apiClient from "./apiClient";
-import { users } from "../mock/users";
-
-const delay = (value) =>
-  new Promise((resolve) => {
-    window.setTimeout(() => resolve(value), 250);
-  });
-
-const withoutPassword = (user) => {
-  const safeUser = { ...user };
-  delete safeUser.password;
-  return safeUser;
-};
 
 export const authService = {
   async login({ email, password }) {
-    try {
-      // POST to `/api/auth/login`
-      const response = await apiClient.post("/auth/login", { email, password });
-      const { token } = response.data;
+    // POST to `/api/auth/login`
+    const response = await apiClient.post("/auth/login", { email, password });
+    const { token } = response.data;
 
-      // GET user profile from `/api/users/me` using the new token
-      const profileResponse = await apiClient.get("/users/me", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+    // GET user profile from `/api/users/me` using the new token
+    const profileResponse = await apiClient.get("/users/me", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
-      const profile = profileResponse.data;
-      return {
-        user: {
-          id: profile.user_id,
-          name: profile.full_name,
-          email: profile.email,
-          role: profile.role,
-          branch: profile.branch,
-          semester: profile.semester,
-          avatar: (profile.full_name || "")
-            .split(" ")
-            .map((part) => part[0])
-            .join("")
-            .slice(0, 2)
-            .toUpperCase(),
-        },
-        token,
-      };
-    } catch (error) {
-      console.warn("Backend auth login failed. Falling back to mock auth.", error);
-      const user = users.find(
-        (item) => item.email.toLowerCase() === email.toLowerCase(),
-      );
-
-      if (!user || user.password !== password) {
-        throw new Error("Invalid email or password.");
-      }
-
-      return delay({
-        user: withoutPassword(user),
-        token: `mock-token-${user.role}-${user.id}`,
-      });
-    }
-  },
-
-  async register(payload) {
-    try {
-      // POST to `/api/auth/register`
-      const response = await apiClient.post("/auth/register", {
-        full_name: payload.name,
-        email: payload.email,
-        password: payload.password,
-        branch: payload.branch,
-        semester: payload.role === "student" ? Number(payload.semester) : undefined,
-      });
-      const { token } = response.data;
-
-      // GET user profile from `/api/users/me`
-      const profileResponse = await apiClient.get("/users/me", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const profile = profileResponse.data;
-      return {
-        user: {
-          id: profile.user_id,
-          name: profile.full_name,
-          email: profile.email,
-          role: profile.role,
-          branch: profile.branch,
-          semester: profile.semester,
-          avatar: (profile.full_name || "")
-            .split(" ")
-            .map((part) => part[0])
-            .join("")
-            .slice(0, 2)
-            .toUpperCase(),
-        },
-        token,
-      };
-    } catch (error) {
-      console.warn("Backend auth registration failed. Falling back to mock registration.", error);
-      const newUser = {
-        id: `${payload.role}-${Date.now()}`,
-        name: payload.name,
-        email: payload.email,
-        role: payload.role,
-        branch: payload.branch,
-        semester: payload.role === "student" ? payload.semester : undefined,
-        avatar: payload.name
+    const profile = profileResponse.data;
+    return {
+      user: {
+        id: profile.user_id,
+        name: profile.full_name,
+        email: profile.email,
+        role: profile.role,
+        branch_id: profile.branch_id,
+        branch: profile.branch, // resolved branch name from backend
+        semester_id: profile.semester_id,
+        semester: profile.semester_name, // resolved semester name (e.g. "Semester 1") or null
+        avatar: (profile.full_name || "")
           .split(" ")
           .map((part) => part[0])
           .join("")
           .slice(0, 2)
           .toUpperCase(),
-      };
+      },
+      token,
+    };
+  },
 
-      return delay({
-        user: newUser,
-        token: `mock-token-${newUser.role}-${newUser.id}`,
-      });
+  async register(payload) {
+    // POST to `/api/auth/register`
+    const response = await apiClient.post("/auth/register", {
+      full_name: payload.name,
+      email: payload.email,
+      password: payload.password,
+      branch_id: Number(payload.branch_id),
+      semester_id: payload.role === "student" ? Number(payload.semester_id) : undefined,
+      role: payload.role || "student",
+    });
+    const { token } = response.data;
+
+    if (!token) {
+      return {
+        user: null,
+        token: "",
+        needsVerification: true,
+        message: "Registration successful. Please verify your email before logging in.",
+      };
     }
+
+    // GET user profile from `/api/users/me` using the new token
+    const profileResponse = await apiClient.get("/users/me", {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    const profile = profileResponse.data;
+    return {
+      user: {
+        id: profile.user_id,
+        name: profile.full_name,
+        email: profile.email,
+        role: profile.role,
+        branch_id: profile.branch_id,
+        branch: profile.branch, // resolved branch name from backend
+        semester_id: profile.semester_id,
+        semester: profile.semester_name, // resolved semester name (e.g. "Semester 1") or null
+        avatar: (profile.full_name || "")
+          .split(" ")
+          .map((part) => part[0])
+          .join("")
+          .slice(0, 2)
+          .toUpperCase(),
+      },
+      token,
+    };
   },
 
   async forgotPassword(email) {
-    try {
-      const response = await apiClient.post("/auth/forgot-password", { email });
-      return response.data;
-    } catch (error) {
-      console.warn("Backend forgot password failed. Falling back to mock.", error);
-      return delay({ message: `Password reset instructions sent to ${email}.` });
-    }
+    const response = await apiClient.post("/auth/forgot-password", { email });
+    return response.data;
   },
-};
 
+  async resetPassword(token, newPassword) {
+    const response = await apiClient.post("/auth/reset-password", {
+      token: token,
+      new_password: newPassword
+    });
+    return response.data;
+  },
+
+  async verifyEmail(token) {
+    const response = await apiClient.get("/auth/verify-email", {
+      params: { token }
+    });
+    return response.data;
+  },
+
+  async getDeviceHistory() {
+    const response = await apiClient.get("/auth/device-history");
+    return response.data;
+  }
+};

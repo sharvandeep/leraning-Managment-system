@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GraduationCap, ShieldCheck, UserRoundCog } from "lucide-react";
+import { GraduationCap, ShieldCheck, UserRoundCog, Eye, EyeOff } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import TextField from "../../components/forms/TextField";
 import useAuth from "../../hooks/useAuth";
@@ -36,6 +36,8 @@ export default function LoginPage() {
   const [selectedRole, setSelectedRole] = useState("student");
   const [form, setForm] = useState({ email: "student@lms.com", password: "password123" });
   const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
 
   const onChange = (event) => {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
@@ -46,6 +48,11 @@ export default function LoginPage() {
     setError("");
     try {
       const session = await login(form);
+      if (rememberMe) {
+        localStorage.setItem("remembered_email", form.email);
+      } else {
+        localStorage.removeItem("remembered_email");
+      }
       const fallback = `/${session.user.role}/dashboard`;
       navigate(location.state?.from?.pathname || fallback, { replace: true });
     } catch (err) {
@@ -94,20 +101,69 @@ export default function LoginPage() {
           onChange={onChange}
           required
         />
-        <TextField
-          label="Password"
-          name="password"
-          type="password"
-          placeholder="Enter password"
-          value={form.password}
-          onChange={onChange}
-          required
-        />
-        <button className={styles.button} type="submit">Sign in</button>
+        
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "15px", position: "relative" }}>
+          <label style={{ fontSize: "14px", fontWeight: "600", color: "#475569" }}>Password</label>
+          <div style={{ position: "relative" }}>
+            <input
+              name="password"
+              type={showPassword ? "text" : "password"}
+              placeholder="Enter password"
+              value={form.password}
+              onChange={onChange}
+              required
+              style={{
+                width: "100%",
+                padding: "10px 14px",
+                paddingRight: "40px",
+                border: "1px solid #cbd5e1",
+                borderRadius: "8px",
+                fontSize: "14px",
+                outline: "none",
+                transition: "border-color 0.2s",
+                backgroundColor: "white",
+                color: "#1e293b"
+              }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: "absolute",
+                right: "12px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "#64748b",
+                display: "flex",
+                alignItems: "center",
+                padding: "0"
+              }}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "15px 0" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "14px", color: "#475569" }}>
+            <input 
+              type="checkbox" 
+              checked={rememberMe} 
+              onChange={(e) => setRememberMe(e.target.checked)}
+              style={{ accentColor: "#0284c7", cursor: "pointer" }}
+            />
+            Remember Me
+          </label>
+          <Link to="/forgot-password" style={{ fontSize: "14px", color: "#0284c7", textDecoration: "none", fontWeight: "500" }}>Forgot password?</Link>
+        </div>
+
+        <button className={styles.button} type="submit" style={{ width: "100%", marginTop: "10px" }}>Sign in</button>
       </form>
-      <div className={styles.authLinks}>
-        <Link to="/forgot-password">Forgot password?</Link>
-        <Link to="/register">New login? Register</Link>
+      <div className={styles.authLinks} style={{ marginTop: "20px", display: "flex", justifyContent: "center" }}>
+        <Link to="/register">New student or teacher? Register</Link>
       </div>
     </div>
   );

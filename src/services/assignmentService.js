@@ -1,5 +1,4 @@
 import apiClient from "./apiClient";
-import { assignments } from "../mock/assignments";
 
 const mapAssignment = (backendAsg) => {
   if (!backendAsg) return null;
@@ -20,114 +19,85 @@ const mapAssignment = (backendAsg) => {
 };
 
 export const assignmentService = {
-  async getAssignments(courseIds = []) {
-    try {
-      if (!courseIds.length) {
-        // If no course filter is provided, fetch all course assignments (mock behavior or handle)
-        return assignments;
+  async getAssignments(courseIds) {
+    if (courseIds && courseIds.length === 0) return [];
+    let ids = courseIds;
+    if (!ids || !ids.length) {
+      // Fetch all courses first to determine which assignments to load
+      try {
+        const coursesResponse = await apiClient.get("/courses");
+        ids = coursesResponse.data.map(c => c.course_id || c.id);
+      } catch (err) {
+        console.error("Failed to fetch courses for assignments", err);
+        return [];
       }
-      
-      // Query course assignments in parallel for each courseId
-      const fetchPromises = courseIds.map((courseId) =>
-        apiClient.get(`/courses/${courseId}/assignments`).then((res) => res.data)
-      );
-      
-      const results = await Promise.all(fetchPromises);
-      const allAssignments = results.flat().map(mapAssignment);
-      return allAssignments;
-    } catch (error) {
-      console.warn("Backend getAssignments failed. Falling back to mock assignments.", error);
-      if (!courseIds.length) return assignments;
-      return assignments.filter((assignment) => courseIds.includes(assignment.courseId));
     }
+    
+    if (!ids || !ids.length) return [];
+    
+    const fetchPromises = ids.map((courseId) =>
+      apiClient.get(`/courses/${courseId}/assignments`).then((res) => res.data)
+    );
+    
+    const results = await Promise.all(fetchPromises);
+    return results.flat().map(mapAssignment);
   },
 
   async createAssignment(courseId, payload) {
-    try {
-      const response = await apiClient.post(`/courses/${courseId}/assignments`, {
-        title: payload.title,
-        description: payload.instructions || payload.description || "",
-        due_date: payload.dueDate,
-        total_marks: Number(payload.maxMarks) || 100,
-      });
-      return mapAssignment(response.data);
-    } catch (error) {
-      console.warn("Backend createAssignment failed. Falling back to mock response.", error);
-      return { id: `asg-${Date.now()}`, ...payload, status: "Published" };
-    }
+    const response = await apiClient.post(`/courses/${courseId}/assignments`, {
+      title: payload.title,
+      description: payload.instructions || payload.description || "",
+      due_date: payload.dueDate,
+      total_marks: Number(payload.maxMarks) || 100,
+    });
+    return mapAssignment(response.data);
   },
 
   async updateAssignment(assignmentId, payload) {
-    try {
-      const response = await apiClient.put(`/assignments/${assignmentId}`, {
-        due_date: payload.dueDate,
-        total_marks: Number(payload.maxMarks),
-        title: payload.title,
-        description: payload.instructions || payload.description,
-      });
-      return mapAssignment(response.data);
-    } catch (error) {
-      console.warn(`Backend updateAssignment ${assignmentId} failed. Falling back to mock.`, error);
-      return { id: assignmentId, ...payload };
-    }
+    const response = await apiClient.put(`/assignments/${assignmentId}`, {
+      due_date: payload.dueDate,
+      total_marks: Number(payload.maxMarks),
+      title: payload.title,
+      description: payload.instructions || payload.description,
+    });
+    return mapAssignment(response.data);
   },
 
   async deleteAssignment(assignmentId) {
-    try {
-      const response = await apiClient.delete(`/assignments/${assignmentId}`);
-      return response.data;
-    } catch (error) {
-      console.warn(`Backend deleteAssignment ${assignmentId} failed. Falling back to mock.`, error);
-      return { message: "deleted" };
-    }
+    const response = await apiClient.delete(`/assignments/${assignmentId}`);
+    return response.data;
   },
 
   // Submissions and Grading
   async getSubmissions(assignmentId) {
-    try {
-      const response = await apiClient.get(`/assignments/${assignmentId}/submissions`);
-      return response.data.map((sub) => ({
-        ...sub,
-        submissionId: String(sub.submission_id || sub.submissionId || sub.id),
-        studentId: String(sub.student_id || sub.studentId),
-        studentName: sub.student_name || "Student",
-        submittedAt: sub.submitted_at || sub.submittedAt,
-        status: sub.status || "Pending",
-      }));
-    } catch (error) {
-      console.warn(`Backend getSubmissions for assignment ${assignmentId} failed. Falling back to empty queue.`, error);
-      return [];
-    }
+    const response = await apiClient.get(`/assignments/${assignmentId}/submissions`);
+    return response.data.map((sub) => ({
+      ...sub,
+      submissionId: String(sub.submission_id || sub.submissionId || sub.id),
+      studentId: String(sub.student_id || sub.studentId),
+      studentName: sub.student_name || "Student",
+      submittedAt: sub.submitted_at || sub.submittedAt,
+      status: sub.status || "Pending",
+    }));
   },
 
   async submitAssignment(assignmentId, file) {
     const formData = new FormData();
     formData.append("file", file);
 
-    try {
-      const response = await apiClient.post(`/assignments/${assignmentId}/submit`, formData, {
-        headers: {
-          "Content-Type": "multipart/form-data",
-        },
-      });
-      return response.data;
-    } catch (error) {
-      console.warn(`Backend submitAssignment for assignment ${assignmentId} failed. Falling back to mock response.`, error);
-      return { submission_id: `mock-sub-${Date.now()}`, status: "Submitted" };
-    }
+    const response = await apiClient.post(`/assignments/${assignmentId}/submit`, formData, {
+      headers: {
+        "Content-Type": "multipart/form-data",
+      },
+    });
+    return response.data;
   },
 
   async gradeSubmission(submissionId, marks, feedback = "") {
-    try {
-      const response = await apiClient.put(`/submissions/${submissionId}`, {
-        marks: Number(marks),
-        feedback,
-      });
-      return response.data;
-    } catch (error) {
-      console.warn(`Backend gradeSubmission for ${submissionId} failed. Falling back to mock.`, error);
-      return { submission_id: submissionId, marks, feedback, status: "Graded" };
-    }
+    const response = await apiClient.put(`/submissions/${submissionId}`, {
+      marks: Number(marks),
+      feedback,
+    });
+    return response.data;
   },
 };
-
