@@ -6,12 +6,27 @@ import styles from "../../styles/ui.module.css";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
   const onSubmit = async (event) => {
     event.preventDefault();
-    const response = await authService.forgotPassword(email);
-    setMessage(response.message);
+    setError("");
+    setMessage("");
+    setLoading(true);
+    try {
+      const response = await authService.forgotPassword(email);
+      setMessage(response.message || "Reset link sent! Please check your inbox.");
+    } catch (err) {
+      console.error("Forgot password request failed", err);
+      setError(
+        err.response?.data?.detail || 
+        "Failed to request password reset. Please check your connection."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -20,7 +35,8 @@ export default function ForgotPasswordPage() {
         <h1 className={styles.title}>Reset password</h1>
         <p className={styles.subtitle}>Enter your username or email and we will prepare reset instructions.</p>
       </div>
-      {message && <div className={styles.successMessage}>{message}</div>}
+      {error && <div className={styles.alertDanger} style={{ padding: "10px", borderRadius: "6px", fontSize: "13px", marginBottom: "15px" }}>{error}</div>}
+      {message && <div className={styles.alertSuccess} style={{ padding: "10px", borderRadius: "6px", fontSize: "13px", marginBottom: "15px" }}>{message}</div>}
       <form className={styles.form} onSubmit={onSubmit}>
         <TextField
           label="Username"
@@ -29,8 +45,11 @@ export default function ForgotPasswordPage() {
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           required
+          disabled={loading}
         />
-        <button className={styles.button} type="submit">Send reset link</button>
+        <button className={styles.button} type="submit" disabled={loading}>
+          {loading ? "Sending..." : "Send reset link"}
+        </button>
       </form>
       <div className={styles.authLinks}>
         <Link to="/login">Back to login</Link>
