@@ -28,6 +28,7 @@ import QuizManagement from "./pages/teacher/QuizManagement.jsx";
 import StudentPerformance from "./pages/teacher/StudentPerformance.jsx";
 import AttendanceManagement from "./pages/teacher/AttendanceManagement.jsx";
 import TeacherProfile from "./pages/teacher/Profile.jsx";
+import ClassroomSessions from "./pages/teacher/ClassroomSessions.jsx";
 import AdminDashboard from "./pages/admin/Dashboard.jsx";
 import UserManagement from "./pages/admin/UserManagement.jsx";
 import CourseManagement from "./pages/admin/CourseManagement.jsx";
@@ -74,6 +75,7 @@ export default function App() {
           <Route path="attendance" element={<AttendanceManagement />} />
           <Route path="performance" element={<StudentPerformance />} />
           <Route path="profile" element={<TeacherProfile />} />
+          <Route path="sessions" element={<ClassroomSessions />} />
         </Route>
       </Route>
 

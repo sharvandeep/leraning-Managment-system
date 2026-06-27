@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import SelectField from "../../components/forms/SelectField";
 import TextField from "../../components/forms/TextField";
 import useAuth from "../../hooks/useAuth";
+import { useToast } from "../../context/ToastContext";
 import { branchService } from "../../services/branchService";
 import { semesterService } from "../../services/semesterService";
 import styles from "../../styles/ui.module.css";
@@ -11,7 +12,11 @@ import styles from "../../styles/ui.module.css";
 export default function RegisterPage() {
   const navigate = useNavigate();
   const { register } = useAuth();
+  const { showToast } = useToast();
   const [successMessage, setSuccessMessage] = useState("");
+  const [successTitle, setSuccessTitle] = useState("Registration successful");
+  const [successLink, setSuccessLink] = useState({ to: "/login", label: "Return to login" });
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     role: "student",
     name: "",
@@ -69,27 +74,41 @@ export default function RegisterPage() {
   const onSubmit = async (event) => {
     event.preventDefault();
     setError("");
+    setSuccessMessage("");
     if (form.password !== form.confirmPassword) {
       setError("Passwords do not match.");
+      showToast("Passwords do not match.", "error");
       return;
     }
     if (form.role === "student" && !form.semester_id) {
       setError("Students must select a semester.");
+      showToast("Students must select a semester.", "error");
       return;
     }
     try {
+      setIsSubmitting(true);
       const session = await register(form);
       if (session.needsVerification) {
+        setSuccessTitle("Verify your email");
+        setSuccessLink({ to: "/login", label: "Return to login" });
         setSuccessMessage(session.message || "Registration successful! An activation link has been sent to your email. Please verify your account before logging in.");
+        showToast("Registration successful! Please verify your email.", "success");
       } else {
-        navigate(`/${session.user.role}/dashboard`, { replace: true });
+        const dashboardPath = `/${session.user.role}/dashboard`;
+        setSuccessTitle("Registration successful");
+        setSuccessLink({ to: dashboardPath, label: "Continue to dashboard" });
+        setSuccessMessage(`Welcome, ${session.user.name}! Your ${session.user.role} account has been created successfully. Taking you to your dashboard...`);
+        showToast(`Registration successful! Welcome, ${session.user.name}.`, "success");
+        window.setTimeout(() => navigate(dashboardPath, { replace: true }), 1800);
       }
     } catch (err) {
-      setError(err.response?.data?.detail || "Registration failed. Please check your details.");
+      const errMsg = err.response?.data?.detail || "Registration failed. Please check your details.";
+      setError(errMsg);
+      showToast(errMsg, "error");
+    } finally {
+      setIsSubmitting(false);
     }
   };
-
-  const branchOptions = branches.map((b) => ({ value: String(b.branch_id), label: b.name }));
   const semesterOptions = semesters.map((s) => ({ value: String(s.semester_id), label: s.name }));
 
   if (successMessage) {
@@ -108,12 +127,12 @@ export default function RegisterPage() {
         }}>
           <GraduationCap size={32} />
         </div>
-        <h1 className={styles.title} style={{ marginBottom: "12px" }}>Verify your email</h1>
+        <h1 className={styles.title} style={{ marginBottom: "12px" }}>{successTitle}</h1>
         <p className={styles.subtitle} style={{ fontSize: "15px", color: "#475569", lineHeight: "1.6", marginBottom: "30px" }}>
           {successMessage}
         </p>
         <Link 
-          to="/login" 
+          to={successLink.to} 
           className={styles.button} 
           style={{ 
             display: "inline-block", 
@@ -125,7 +144,7 @@ export default function RegisterPage() {
             color: "white"
           }}
         >
-          Return to login
+          {successLink.label}
         </Link>
       </div>
     );
@@ -173,7 +192,9 @@ export default function RegisterPage() {
         {form.role === "student" && (
           <SelectField label="Semester" name="semester_id" options={semesterOptions} value={form.semester_id} onChange={onChange} required />
         )}
-        <button className={styles.button} type="submit">Register</button>
+        <button className={styles.button} type="submit" disabled={isSubmitting}>
+          {isSubmitting ? "Creating account..." : "Register"}
+        </button>
       </form>
       <div className={styles.authLinks}>
         <Link to="/login">Already have a login?</Link>

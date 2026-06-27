@@ -28,5 +28,21 @@ apiClient.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Automatically logout user on 401 Unauthorized response from backend (self-heals invalid sessions)
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      console.warn("Unauthorized session token detected. Clearing session and redirecting...");
+      window.localStorage.removeItem("lms-auth-session");
+      if (window.location.pathname !== "/login" && window.location.pathname !== "/register") {
+        window.location.href = "/login";
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default apiClient;
+
 

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Sparkles } from "lucide-react";
 import Badge from "../../components/common/Badge";
 import PageHeader from "../../components/common/PageHeader";
 import TextField from "../../components/forms/TextField";
@@ -8,6 +9,7 @@ import { courseService } from "../../services/courseService";
 import { branchService } from "../../services/branchService";
 import { semesterService } from "../../services/semesterService";
 import { userService } from "../../services/userService";
+import { aiService } from "../../services/aiService";
 import styles from "../../styles/ui.module.css";
 
 export default function CourseManagement() {
@@ -29,6 +31,9 @@ export default function CourseManagement() {
   // States for inline teacher assignment
   const [selections, setSelections] = useState({});
   const [actionStatus, setActionStatus] = useState({});
+
+  // AI Syllabus loading state
+  const [aiSyllabusLoading, setAiSyllabusLoading] = useState(false);
 
   async function loadData() {
     try {
@@ -88,6 +93,24 @@ export default function CourseManagement() {
     } catch (err) {
       setActionStatus((prev) => ({ ...prev, [courseId]: "error" }));
       setError(err.response?.data?.detail || "Failed to assign teacher.");
+    }
+  };
+
+  const handleAutoSyllabus = async () => {
+    if (!title.trim()) {
+      alert("Please enter a Course Title first to generate a syllabus outline.");
+      return;
+    }
+    setError("");
+    setAiSyllabusLoading(true);
+    try {
+      const outline = await aiService.generateSyllabus(title.trim());
+      setDescription(outline);
+      setSuccess("AI Syllabus generated and drafted successfully!");
+    } catch (err) {
+      setError("AI Syllabus generation failed: " + err.message);
+    } finally {
+      setAiSyllabusLoading(false);
     }
   };
 
@@ -260,20 +283,53 @@ export default function CourseManagement() {
                 />
               </div>
               <SelectField 
-                label="Assign Teacher" 
+                label="Assign Teacher (Optional)" 
                 options={teacherOptions} 
                 value={teacherId} 
                 onChange={(e) => setTeacherId(e.target.value)} 
-                required 
+                placeholder="Not Assigned (Select later)"
               />
-              <TextField 
-                label="Description" 
-                as="textarea" 
-                placeholder="Enter course syllabus or outline..." 
-                value={description} 
-                onChange={(e) => setDescription(e.target.value)} 
-              />
-              <button className={styles.button} type="submit" disabled={submitting}>
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <label className={styles.label} style={{ fontSize: "13px", fontWeight: "600", color: "#374151" }}>Syllabus / Course Description</label>
+                  <button 
+                    type="button"
+                    onClick={handleAutoSyllabus}
+                    disabled={aiSyllabusLoading || !title.trim()}
+                    style={{ 
+                      background: "none", 
+                      border: "none", 
+                      color: "#7c3aed", 
+                      cursor: "pointer", 
+                      fontSize: "11px", 
+                      fontWeight: "750",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px"
+                    }}
+                  >
+                    <Sparkles size={12} /> {aiSyllabusLoading ? "Writing syllabus..." : "✨ Auto Write Syllabus"}
+                  </button>
+                </div>
+                <textarea 
+                  className={styles.textarea} 
+                  placeholder="Enter course syllabus outline, learning outcomes, or click Auto Write to draft one instantly with AI..." 
+                  value={description} 
+                  onChange={(e) => setDescription(e.target.value)} 
+                  style={{ 
+                    width: "100%", 
+                    minHeight: "120px", 
+                    padding: "10px 14px", 
+                    borderRadius: "10px", 
+                    border: "1px solid #cbd5e1",
+                    fontSize: "13px",
+                    outline: "none"
+                  }}
+                />
+              </div>
+
+              <button className={styles.button} type="submit" disabled={submitting} style={{ marginTop: "12px" }}>
                 {submitting ? "Creating..." : "Create Course"}
               </button>
             </form>

@@ -3,6 +3,7 @@ import { GraduationCap, ShieldCheck, UserRoundCog, Eye, EyeOff } from "lucide-re
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import TextField from "../../components/forms/TextField";
 import useAuth from "../../hooks/useAuth";
+import { useToast } from "../../context/ToastContext";
 import styles from "../../styles/ui.module.css";
 
 const roleOptions = [
@@ -33,6 +34,7 @@ export default function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { login } = useAuth();
+  const { showToast } = useToast();
   const [selectedRole, setSelectedRole] = useState("student");
   const [form, setForm] = useState({ email: "student@lms.com", password: "password123" });
   const [error, setError] = useState("");
@@ -53,12 +55,16 @@ export default function LoginPage() {
       } else {
         localStorage.removeItem("remembered_email");
       }
+      showToast(`Welcome back, ${session.user.name}! Access granted.`, "success");
       const fallback = `/${session.user.role}/dashboard`;
       navigate(location.state?.from?.pathname || fallback, { replace: true });
     } catch (err) {
-      setError(err.message);
+      const errMsg = err.response?.data?.detail || "Invalid email or password.";
+      setError(errMsg);
+      showToast(errMsg, "error");
     }
   };
+
 
   const selectRole = (option) => {
     setSelectedRole(option.role);

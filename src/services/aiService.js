@@ -544,6 +544,42 @@ Best regards,
 Prof. (Teacher)`;
 
     return { riskLevel, analysis, emailDraft };
+  },
+
+  // 6. AI Syllabus / Course Outline Generator
+  async generateSyllabus(courseTitle) {
+    const provider = this.getProvider();
+
+    if (provider === "gemini") {
+      const systemInstruction = "You are a senior university curriculum designer. Generate a structured syllabus description containing Course Overview, Key Topics, and Learning Outcomes.";
+      const prompt = `Generate a syllabus description for the course: "${courseTitle}". Return in clear, readable formatting.`;
+      return this.callGemini(prompt, systemInstruction, false);
+    }
+
+    if (provider === "ollama") {
+      const systemInstruction = "You are a university curriculum designer. Reply with a clear course outline.";
+      const prompt = `Generate a syllabus description for the course: "${courseTitle}".`;
+      return this.callOllama(prompt, systemInstruction, false);
+    }
+
+    // Simulator
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    return `### Course Syllabus: ${courseTitle}
+
+#### Overview
+This course provides a comprehensive introduction to the fundamental concepts and practical skills required in ${courseTitle}. Students will explore key theories, design methodologies, and industry best practices.
+
+#### Key Topics Covered
+1. **Module 1: Foundations & Architecture** - Introduction to core models, paradigms, and execution environments.
+2. **Module 2: Intermediate Design Principles** - Structuring complex components, data pipelines, and operational constraints.
+3. **Module 3: Advanced Optimization & Scaling** - Query optimization, caching strategies, and load management.
+4. **Module 4: Security & Professional Best Practices** - Standard defense models, access controls, and validation.
+
+#### Learning Outcomes
+- Apply foundational concepts to build robust systems.
+- Optimize performance using state-of-the-art tools and procedures.
+- Analyze and troubleshoot production-level issues.`;
   }
 };
+
 

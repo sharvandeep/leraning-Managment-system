@@ -29,9 +29,7 @@ export function useRoleData(user) {
             ? allCourses.filter(
                 (c) => c.branch === user.branch && String(c.semester) === String(user.semester),
               )
-            : user.role === "teacher"
-              ? allCourses.filter((c) => String(c.teacherId) === String(user.id))
-              : allCourses;
+            : allCourses;
 
         const courseIds = roleCourses.map((c) => c.id);
 
@@ -124,4 +122,3 @@ export function useRoleData(user) {
 
   return data;
 }
-

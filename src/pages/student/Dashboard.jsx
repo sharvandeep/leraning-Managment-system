@@ -17,7 +17,9 @@ import {
   User,
   Zap,
   ArrowRight,
-  Loader2
+  Loader2,
+  MapPin,
+  Video
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import useAuth from "../../hooks/useAuth";
@@ -28,6 +30,7 @@ import { studyTrackingService } from "../../services/studyTrackingService";
 import { gamificationService } from "../../services/gamificationService";
 import { attendanceService } from "../../services/attendanceService";
 import { discussionService } from "../../services/discussionService";
+import { classroomSessionService } from "../../services/classroomSessionService";
 import styles from "../../styles/ui.module.css";
 
 // Helper to format date strings
@@ -43,6 +46,7 @@ export default function StudentDashboard() {
   const [courses, setCourses] = useState([]);
   const [assignments, setAssignments] = useState([]);
   const [quizzes, setQuizzes] = useState([]);
+  const [sessions, setSessions] = useState([]);
   
   // New tracking and gamification states
   const [gamification, setGamification] = useState({ streak: 1, active_days: 1, grade_average: 0, achievements: [] });
@@ -54,6 +58,11 @@ export default function StudentDashboard() {
   // Calendar states
   const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
   const [selectedCalendarDay, setSelectedCalendarDay] = useState(new Date().getDate());
+  const [reminders, setReminders] = useState(() => {
+    const stored = window.localStorage.getItem("lms-student-reminders");
+    return stored ? JSON.parse(stored) : [];
+  });
+  const [newReminderText, setNewReminderText] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -64,14 +73,16 @@ export default function StudentDashboard() {
         const fetchedCourses = await courseService.getCourses();
         const courseIds = fetchedCourses.map(c => c.id);
         
-        const [fetchedAssignments, fetchedQuizzes] = await Promise.all([
+        const [fetchedAssignments, fetchedQuizzes, fetchedSessions] = await Promise.all([
           assignmentService.getAssignments(courseIds),
-          quizService.getQuizzes(courseIds)
+          quizService.getQuizzes(courseIds),
+          classroomSessionService.getUpcomingSessions().catch(() => [])
         ]);
-
+ 
         setCourses(fetchedCourses);
         setAssignments(fetchedAssignments);
         setQuizzes(fetchedQuizzes);
+        setSessions(fetchedSessions);
 
         // 2. Fetch tracking, gamification, and announcements
         const [gameStatus, bookmarkedList, recentList, downloadList] = await Promise.all([
@@ -135,6 +146,38 @@ export default function StudentDashboard() {
   const monthName = currentCalendarDate.toLocaleString("default", { month: "long" });
 
   const prevMonthDays = Array.from({ length: firstDayIndex }, (_, i) => prevMonthTotalDays - firstDayIndex + i + 1);
+  
+  const handleAddReminder = (e) => {
+    e.preventDefault();
+    if (!newReminderText.trim()) return;
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(selectedCalendarDay).padStart(2, "0")}`;
+    const newReminder = {
+      id: Date.now().toString(),
+      date: dateStr,
+      text: newReminderText.trim()
+    };
+    const updated = [...reminders, newReminder];
+    setReminders(updated);
+    window.localStorage.setItem("lms-student-reminders", JSON.stringify(updated));
+    setNewReminderText("");
+  };
+
+  const handleDeleteReminder = (reminderId) => {
+    const updated = reminders.filter(r => r.id !== reminderId);
+    setReminders(updated);
+    window.localStorage.setItem("lms-student-reminders", JSON.stringify(updated));
+  };
+
+  const getDayReminders = (day) => {
+    const dateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return reminders.filter(r => r.date === dateStr);
+  };
+
+  const getDaySessions = (day) => {
+    const localDateStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return sessions.filter(s => s.session_date === localDateStr);
+  };
+
   const currentMonthDays = Array.from({ length: totalDays }, (_, i) => i + 1);
   
   // Check if a day has assignments or quizzes due
@@ -156,21 +199,6 @@ export default function StudentDashboard() {
   const handleNextMonth = () => {
     setCurrentCalendarDate(new Date(year, month + 1, 1));
   };
-
-  // Mock static schedule matching course list for realism
-  const getTodayClasses = () => {
-    if (courses.length === 0) return [];
-    const timings = ["09:30 AM", "11:15 AM", "02:00 PM", "03:45 PM"];
-    return courses.slice(0, 3).map((c, idx) => ({
-      courseTitle: c.title,
-      code: c.code,
-      time: timings[idx] || "01:00 PM",
-      teacher: c.teacher_name,
-      room: `Building 3 - Room ${301 + idx * 2}`
-    }));
-  };
-
-  const todayClasses = getTodayClasses();
 
   return (
     <section className={styles.page}>
@@ -324,15 +352,44 @@ export default function StudentDashboard() {
           <article className={styles.panel}>
             <div className={styles.panelHeader} style={{ borderBottom: "1px solid #f1f5f9" }}>
               <h2 className={styles.panelTitle} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Calendar size={18} style={{ color: "#0284c7" }} /> Futuristic Workspace Calendar
+                <Calendar size={18} style={{ color: "#0284c7" }} /> Futuristic Workspace Calendar & Planner
               </h2>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <button onClick={handlePrevMonth} style={{ background: "none", border: "1px solid #cbd5e1", borderRadius: "4px", padding: "2px", cursor: "pointer", display: "flex" }}><ChevronLeft size={16} /></button>
                 <span style={{ fontSize: "14px", fontWeight: "700", color: "#0f172a", minWidth: "110px", textAlign: "center" }}>{monthName} {year}</span>
                 <button onClick={handleNextMonth} style={{ background: "none", border: "1px solid #cbd5e1", borderRadius: "4px", padding: "2px", cursor: "pointer", display: "flex" }}><ChevronRight size={16} /></button>
+                <button 
+                  onClick={() => {
+                    setCurrentCalendarDate(new Date());
+                    setSelectedCalendarDay(new Date().getDate());
+                  }}
+                  style={{
+                    backgroundColor: "white",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "6px",
+                    padding: "4px 10px",
+                    fontSize: "12px",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                    marginLeft: "8px",
+                    color: "#334155",
+                    transition: "all 0.2s"
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.backgroundColor = "#f1f5f9"}
+                  onMouseLeave={e => e.currentTarget.style.backgroundColor = "white"}
+                >
+                  Today
+                </button>
               </div>
             </div>
             <div className={styles.panelBody} style={{ padding: "20px" }}>
+              
+              {/* Calendar Legend */}
+              <div style={{ display: "flex", gap: "16px", marginBottom: "16px", fontSize: "11px", fontWeight: "600", justifyContent: "flex-end" }}>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#ef4444" }} /> Assignment Deadlines</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#3b82f6" }} /> Personal Reminders</span>
+                <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}><span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#a855f7" }} /> Enrolled Lectures</span>
+              </div>
               
               {/* Calendar Grid Headers */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "6px", textAlign: "center", marginBottom: "8px", fontWeight: "600", fontSize: "12px", color: "#64748b" }}>
@@ -342,13 +399,14 @@ export default function StudentDashboard() {
               {/* Calendar Days */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "6px" }}>
                 {prevMonthDays.map((day, idx) => (
-                  <div key={`prev-${idx}`} style={{ minHeight: "50px", padding: "4px", border: "1px solid #f1f5f9", borderRadius: "6px", color: "#cbd5e1", fontSize: "12px", backgroundColor: "#fafafa" }}>
+                  <div key={`prev-${idx}`} style={{ minHeight: "64px", padding: "6px", border: "1px solid #f1f5f9", borderRadius: "8px", color: "#cbd5e1", fontSize: "12px", backgroundColor: "#fafafa" }}>
                     {day}
                   </div>
                 ))}
                 
                 {currentMonthDays.map((day) => {
                   const deadlines = getDayDeadlines(day);
+                  const dayReminders = getDayReminders(day);
                   const isToday = day === new Date().getDate() && month === new Date().getMonth() && year === new Date().getFullYear();
                   const isSelected = day === selectedCalendarDay;
                   
@@ -357,18 +415,30 @@ export default function StudentDashboard() {
                       key={`day-${day}`} 
                       onClick={() => setSelectedCalendarDay(day)}
                       style={{ 
-                        minHeight: "60px", 
-                        padding: "4px", 
+                        minHeight: "64px", 
+                        padding: "6px", 
                         border: "1px solid #e2e8f0", 
-                        borderRadius: "8px", 
+                        borderRadius: "10px", 
                         fontSize: "12px", 
                         cursor: "pointer",
                         position: "relative",
-                        transition: "all 0.2s",
+                        transition: "all 0.2s ease",
                         backgroundColor: isSelected ? "#f0f9ff" : "white",
                         borderColor: isSelected ? "#0284c7" : isToday ? "#10b981" : "#e2e8f0",
-                        boxShadow: isToday ? "0 0 8px rgba(16, 185, 129, 0.2)" : "none",
-                        fontWeight: isToday || isSelected ? "700" : "500"
+                        boxShadow: isToday ? "0 0 10px rgba(16, 185, 129, 0.25)" : "none",
+                        fontWeight: isToday || isSelected ? "700" : "500",
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.backgroundColor = "#f8fafc";
+                          e.currentTarget.style.borderColor = "#cbd5e1";
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isSelected) {
+                          e.currentTarget.style.backgroundColor = "white";
+                          e.currentTarget.style.borderColor = "#e2e8f0";
+                        }
                       }}
                     >
                       <span style={{ 
@@ -384,46 +454,142 @@ export default function StudentDashboard() {
                         {day}
                       </span>
                       
-                      {/* Deadline indicators */}
-                      {deadlines.totalCount > 0 && (
-                        <div style={{ 
-                          position: "absolute", 
-                          bottom: "4px", 
-                          left: "4px", 
-                          right: "4px", 
-                          backgroundColor: "#fef2f2", 
-                          border: "1px solid #fca5a5",
-                          borderRadius: "4px", 
-                          padding: "2px", 
-                          fontSize: "9px",
-                          color: "#b91c1c",
-                          textAlign: "center",
-                          fontWeight: "700"
-                        }}>
-                          {deadlines.totalCount} Due
-                        </div>
-                      )}
+                      {/* Dots list container */}
+                      <div style={{ display: "flex", gap: "4px", marginTop: "6px", justifyContent: "center" }}>
+                        {deadlines.totalCount > 0 && (
+                          <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#ef4444" }} title="Assignment due" />
+                        )}
+                        {dayReminders.length > 0 && (
+                          <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#3b82f6" }} title="Personal reminder" />
+                        )}
+                        {getDaySessions(day).length > 0 && (
+                          <span style={{ width: "6px", height: "6px", borderRadius: "50%", backgroundColor: "#a855f7" }} title="Lectures scheduled" />
+                        )}
+                      </div>
                     </div>
                   );
                 })}
               </div>
 
               {/* Selected Day Details Panel */}
-              <div style={{ marginTop: "16px", padding: "16px", borderRadius: "8px", border: "1px dashed #cbd5e1", backgroundColor: "#fafafa" }}>
-                <strong style={{ fontSize: "14px", color: "#0f172a" }}>Schedule & Deadlines for {monthName} {selectedCalendarDay}:</strong>
-                <div style={{ marginTop: "10px", display: "flex", flexDirection: "column", gap: "8px" }}>
-                  {getDayDeadlines(selectedCalendarDay).totalCount === 0 ? (
-                    <span style={{ fontSize: "13px", color: "#64748b" }}>No homework or assessments due on this date. Enjoy your day!</span>
-                  ) : (
-                    getDayDeadlines(selectedCalendarDay).assignments.map(a => (
-                      <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "#fff", padding: "10px", borderRadius: "6px", border: "1px solid #e2e8f0" }}>
-                        <span style={{ fontSize: "13px", color: "#b91c1c", fontWeight: "700" }}>[Assignment Due]</span>
-                        <strong style={{ fontSize: "13px", color: "#334155" }}>{a.title}</strong>
-                        <span style={{ fontSize: "12px", color: "#64748b" }}>{a.maxMarks} Marks</span>
-                      </div>
-                    ))
-                  )}
+              <div style={{ marginTop: "24px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                
+                {/* Left side column: Academic Deadlines & Scheduled Lectures */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  
+                  {/* A. Lectures Scheduled */}
+                  <div style={{ padding: "16px", borderRadius: "10px", border: "1px solid #e2e8f0", backgroundColor: "#f8fafc", display: "flex", flexDirection: "column" }}>
+                    <h3 style={{ fontSize: "13px", fontWeight: "700", color: "#1e293b", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <PlayCircle size={15} style={{ color: "#a855f7" }} /> Lectures Scheduled ({getDaySessions(selectedCalendarDay).length}):
+                    </h3>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {getDaySessions(selectedCalendarDay).length === 0 ? (
+                        <span style={{ fontSize: "12px", color: "#64748b" }}>No scheduled classes today.</span>
+                      ) : (
+                        getDaySessions(selectedCalendarDay).map((session) => {
+                          const courseObj = courses.find(c => c.id === String(session.course_id));
+                          return (
+                            <div key={session.session_id} style={{ backgroundColor: "white", padding: "10px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                                <div>
+                                  <strong style={{ fontSize: "13px", color: "#0f172a", display: "block" }}>{session.title}</strong>
+                                  <small style={{ color: "#64748b" }}>
+                                    {courseObj ? `${courseObj.code} - ${courseObj.title}` : "Course Class"}
+                                  </small>
+                                </div>
+                                <span style={{ fontSize: "11px", fontWeight: "700", color: "#a855f7", backgroundColor: "#faf5ff", padding: "4px 8px", borderRadius: "4px" }}>
+                                  {session.start_time} - {session.end_time}
+                                </span>
+                              </div>
+                              <div style={{ display: "flex", gap: "12px", fontSize: "11px", color: "#475569", marginTop: "6px", borderTop: "1px dashed #e2e8f0", paddingTop: "6px" }}>
+                                {session.room && (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                    <MapPin size={12} style={{ color: "#16a34a" }} /> Room: {session.room}
+                                  </span>
+                                )}
+                                {session.meeting_link && (
+                                  <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
+                                    <Video size={12} style={{ color: "#a855f7" }} />
+                                    <a href={session.meeting_link} target="_blank" rel="noopener noreferrer" style={{ color: "#a855f7", textDecoration: "none", fontWeight: "600" }}>
+                                      Join Online
+                                    </a>
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  {/* B. Academic Deadlines */}
+                  <div style={{ padding: "16px", borderRadius: "10px", border: "1px solid #e2e8f0", backgroundColor: "#f8fafc", display: "flex", flexDirection: "column" }}>
+                    <h3 style={{ fontSize: "13px", fontWeight: "700", color: "#1e293b", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <ClipboardList size={15} style={{ color: "#ef4444" }} /> Academic Deadlines ({getDayDeadlines(selectedCalendarDay).totalCount}):
+                    </h3>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                      {getDayDeadlines(selectedCalendarDay).totalCount === 0 ? (
+                        <span style={{ fontSize: "12px", color: "#64748b" }}>No homework or assessments due.</span>
+                      ) : (
+                        getDayDeadlines(selectedCalendarDay).assignments.map(a => (
+                          <div key={a.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", backgroundColor: "white", padding: "10px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                            <div>
+                              <strong style={{ fontSize: "13px", color: "#b91c1c", display: "block" }}>{a.title}</strong>
+                              <small style={{ color: "#64748b" }}>Deadline Today &bull; {a.maxMarks || a.totalMarks} Marks</small>
+                            </div>
+                            <Link to="/student/assignments" style={{ fontSize: "11px", color: "#0284c7", fontWeight: "700", textDecoration: "none" }}>Submit Tasks &rarr;</Link>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+
                 </div>
+
+                {/* Right side column: Personal Reminders */}
+                <div style={{ padding: "16px", borderRadius: "10px", border: "1px solid #e2e8f0", backgroundColor: "#f8fafc", display: "flex", flexDirection: "column" }}>
+                  <h3 style={{ fontSize: "13px", fontWeight: "700", color: "#1e293b", margin: "0 0 10px 0", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <CalendarCheck size={15} style={{ color: "#3b82f6" }} /> Personal Planner & Reminders ({getDayReminders(selectedCalendarDay).length}):
+                  </h3>
+                  
+                  {/* Reminders List */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto", maxHeight: "120px", flexGrow: 1, marginBottom: "12px" }}>
+                    {getDayReminders(selectedCalendarDay).length === 0 ? (
+                      <span style={{ fontSize: "12px", color: "#64748b" }}>No personal reminders set.</span>
+                    ) : (
+                      getDayReminders(selectedCalendarDay).map(rem => (
+                        <div key={rem.id} style={{ backgroundColor: "white", padding: "8px 12px", borderRadius: "8px", border: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: "13px", color: "#334155", fontWeight: "500" }}>{rem.text}</span>
+                          <button 
+                            onClick={() => handleDeleteReminder(rem.id)}
+                            style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", fontSize: "11px", fontWeight: "700", padding: "2px 4px" }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {/* Add Reminder Form */}
+                  <form onSubmit={handleAddReminder} style={{ display: "flex", gap: "8px", marginTop: "auto" }}>
+                    <input 
+                      type="text" 
+                      placeholder="Add personal note..." 
+                      value={newReminderText}
+                      onChange={(e) => setNewReminderText(e.target.value)}
+                      style={{ flexGrow: 1, padding: "8px 12px", border: "1px solid #cbd5e1", borderRadius: "8px", fontSize: "13px", outline: "none", backgroundColor: "white" }}
+                    />
+                    <button 
+                      type="submit" 
+                      style={{ backgroundColor: "#3b82f6", color: "white", border: "none", borderRadius: "8px", padding: "8px 14px", fontWeight: "700", fontSize: "13px", cursor: "pointer" }}
+                    >
+                      Add
+                    </button>
+                  </form>
+                </div>
+
               </div>
 
             </div>
@@ -468,26 +634,26 @@ export default function StudentDashboard() {
         {/* RIGHT COLUMN: Personal Learning Hub */}
         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
           
-          {/* A. Today's Class Schedule */}
+          {/* A. Upcoming Deadlines & Tasks */}
           <article className={styles.panel}>
             <div className={styles.panelHeader} style={{ borderBottom: "1px solid #f1f5f9" }}>
               <h2 className={styles.panelTitle} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Calendar size={18} style={{ color: "#0284c7" }} /> Today's Lecture Schedule
+                <ClipboardList size={18} style={{ color: "#ef4444" }} /> Upcoming Deadlines & Tasks
               </h2>
             </div>
             <div className={styles.panelBody} style={{ padding: "20px", display: "flex", flexDirection: "column", gap: "12px" }}>
-              {todayClasses.length === 0 ? (
-                <p style={{ color: "#64748b", fontSize: "13px" }}>No lectures scheduled for today.</p>
+              {pendingAssignments.length === 0 ? (
+                <p style={{ color: "#64748b", fontSize: "13px" }}>No upcoming assignments or task deadlines!</p>
               ) : (
-                todayClasses.map((lecture, idx) => (
-                  <div key={idx} style={{ display: "flex", gap: "12px", borderLeft: "4px solid #0284c7", paddingLeft: "12px", paddingY: "4px" }}>
+                pendingAssignments.slice(0, 3).map((asg) => (
+                  <div key={asg.id} style={{ display: "flex", gap: "12px", borderLeft: "4px solid #ef4444", paddingLeft: "12px", paddingY: "4px" }}>
                     <div style={{ minWidth: "70px" }}>
-                      <strong style={{ display: "block", fontSize: "13px", color: "#0284c7" }}>{lecture.time}</strong>
-                      <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: "600" }}>ROOM: {lecture.room}</span>
+                      <strong style={{ display: "block", fontSize: "13px", color: "#ef4444" }}>{formatShortDate(asg.dueDate)}</strong>
+                      <span style={{ fontSize: "10px", color: "#94a3b8", fontWeight: "600" }}>{asg.maxMarks} Marks</span>
                     </div>
                     <div>
-                      <strong style={{ display: "block", fontSize: "13px", color: "#1e293b" }}>{lecture.courseTitle}</strong>
-                      <small style={{ color: "#64748b", fontSize: "11px" }}>Prof: {lecture.teacher}</small>
+                      <strong style={{ display: "block", fontSize: "13px", color: "#1e293b" }}>{asg.title}</strong>
+                      <Link to="/student/assignments" style={{ color: "#0284c7", fontSize: "11px", textDecoration: "none", fontWeight: "700" }}>Submit Tasks &rarr;</Link>
                     </div>
                   </div>
                 ))
