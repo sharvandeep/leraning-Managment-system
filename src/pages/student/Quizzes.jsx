@@ -48,7 +48,7 @@ export default function Quizzes() {
               <div className={styles.detailGrid}>
                 <span><strong>Date:</strong> {formatDate(quiz.date)}</span>
                 <span><strong>Duration:</strong> {quiz.duration}</span>
-                <span><strong>Questions:</strong> {quiz.questions}</span>
+                <span><strong>Questions:</strong> {Array.isArray(quiz.questions) ? quiz.questions.length : quiz.questions}</span>
                 <span><strong>Score:</strong> {quiz.score ? `${quiz.score}/${quiz.maxScore}` : "-"}</span>
               </div>
               <div className={styles.topicRow}>

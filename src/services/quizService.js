@@ -58,7 +58,8 @@ export const quizService = {
           ...q,
           id: String(q.id),
           isLocalAi: true,
-          date: q.date || new Date().toISOString()
+          date: q.date || new Date().toISOString(),
+          questions: Array.isArray(q.questions) ? q.questions.length : q.questions
         }));
       } catch (err) {
         console.error("Failed to parse local student quizzes", err);
