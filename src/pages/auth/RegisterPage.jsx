@@ -12,6 +12,18 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const { register } = useAuth();
   const [successMessage, setSuccessMessage] = useState("");
+  const [form, setForm] = useState({
+    role: "student",
+    name: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+    branch_id: "",
+    semester_id: "",
+  });
+  const [error, setError] = useState("");
+  const [branches, setBranches] = useState([]);
+  const [semesters, setSemesters] = useState([]);
 
   useEffect(() => {
     let active = true;
