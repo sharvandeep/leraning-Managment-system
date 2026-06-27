@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BookOpen, ClipboardList, FileText, PenLine, Star, MessageSquare, Send, Award, CheckCircle } from "lucide-react";
+import { BookOpen, ClipboardList, FileText, PenLine, Star, MessageSquare, Send, Award, CheckCircle, Sparkles, X } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/tables/DataTable";
@@ -10,8 +10,24 @@ import { assignmentService } from "../../services/assignmentService";
 import { quizService } from "../../services/quizService";
 import { studyTrackingService } from "../../services/studyTrackingService";
 import { discussionService } from "../../services/discussionService";
+import { aiService } from "../../services/aiService";
 import { formatDate } from "../../utils/formatters";
 import styles from "../../styles/ui.module.css";
+
+const formatShortDate = (value) => {
+  if (!value) return "";
+  try {
+    return new Intl.DateTimeFormat("en", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(new Date(value));
+  } catch (e) {
+    return String(value);
+  }
+};
+
 
 export default function CourseDetails() {
   const { courseId } = useParams();
@@ -21,11 +37,44 @@ export default function CourseDetails() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   
-  // Custom states for tracking, bookmarks, and forums
+   // Custom states for tracking, bookmarks, and forums
   const [starredModules, setStarredModules] = useState({});
   const [forumPosts, setForumPosts] = useState([]);
   const [replyText, setReplyText] = useState({});
   const [submitLoading, setSubmitLoading] = useState(false);
+
+  // AI Summary States
+  const [summaries, setSummaries] = useState({});
+  const [summariesLoading, setSummariesLoading] = useState({});
+
+  const handleSummarize = async (material, event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    const id = material.material_id || material.id;
+    if (summaries[id]) {
+      setSummaries(prev => {
+        const copy = { ...prev };
+        delete copy[id];
+        return copy;
+      });
+      return;
+    }
+    
+    setSummariesLoading(prev => ({ ...prev, [id]: true }));
+    try {
+      const summaryText = await aiService.summarizeMaterial(
+        material.title,
+        material.description || `This reading material is titled "${material.title}" in the ${course?.title || "selected"} course syllabus. It has a file format of ${material.file_type || "document"}.`
+      );
+      setSummaries(prev => ({ ...prev, [id]: summaryText }));
+    } catch (err) {
+      alert("Failed to summarize material: " + err.message);
+    } finally {
+      setSummariesLoading(prev => ({ ...prev, [id]: false }));
+    }
+  };
+
 
   useEffect(() => {
     let active = true;
@@ -232,40 +281,103 @@ export default function CourseDetails() {
                         <p style={{ fontSize: '13px', color: '#9ca3af', margin: '0', paddingLeft: '4px' }}>No study materials uploaded for this module.</p>
                       ) : (
                         module.materials.map((material) => {
+                          const materialId = material.material_id || material.id;
                           const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
                           const rootBaseUrl = apiBaseUrl.replace(/\/api$/, "");
                           const fullFilePath = material.file_path.startsWith("http") 
                             ? material.file_path 
                             : `${rootBaseUrl}${material.file_path}`;
+                          
+                          const hasSummary = !!summaries[materialId];
+                          const isSummaryLoading = !!summariesLoading[materialId];
+                          
                           return (
-                            <a 
-                              className={styles.lessonItem} 
-                              key={material.material_id || material.id} 
-                              href={fullFilePath} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
-                              onClick={() => handleMaterialDownload(material.material_id || material.id)}
-                              style={{ 
-                                textDecoration: 'none', 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                justifyContent: 'space-between',
-                                padding: '12px 16px',
-                                background: '#f8fafc',
-                                borderRadius: '8px',
-                                border: '1px solid #e2e8f0',
-                                transition: "all 0.2s"
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                                <FileText size={18} style={{ color: '#0284c7' }} />
-                                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                                  <strong style={{ fontSize: '14px', color: '#1e293b' }}>{material.title}</strong>
-                                  <small style={{ fontSize: '11px', color: '#64748b' }}>{material.file_type || "document"}</small>
+                            <div key={materialId} style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                              <a 
+                                className={styles.lessonItem} 
+                                href={fullFilePath} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                onClick={() => handleMaterialDownload(materialId)}
+                                style={{ 
+                                  textDecoration: 'none', 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'space-between',
+                                  padding: '12px 16px',
+                                  background: '#f8fafc',
+                                  borderRadius: '8px',
+                                  border: '1px solid #e2e8f0',
+                                  transition: "all 0.2s"
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                  <FileText size={18} style={{ color: '#0284c7' }} />
+                                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                    <strong style={{ fontSize: '14px', color: '#1e293b' }}>{material.title}</strong>
+                                    <small style={{ fontSize: '11px', color: '#64748b' }}>{material.file_type || "document"}</small>
+                                  </div>
                                 </div>
-                              </div>
-                              <Badge variant="success">Open File</Badge>
-                            </a>
+                                <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                                  <button
+                                    onClick={(e) => handleSummarize(material, e)}
+                                    disabled={isSummaryLoading}
+                                    style={{ 
+                                      padding: "4px 10px", 
+                                      borderRadius: "6px", 
+                                      fontSize: "11px", 
+                                      background: hasSummary ? "#f3e8ff" : "linear-gradient(135deg, #7c3aed 0%, #2563eb 100%)",
+                                      color: hasSummary ? "#6b21a8" : "white",
+                                      border: "none",
+                                      cursor: "pointer",
+                                      fontWeight: "600",
+                                      display: "flex",
+                                      alignItems: "center",
+                                      gap: "4px"
+                                    }}
+                                  >
+                                    <Sparkles size={11} /> {isSummaryLoading ? "Summarizing..." : hasSummary ? "Hide Summary" : "AI Summarize"}
+                                  </button>
+                                  <Badge variant="success">Open File</Badge>
+                                </div>
+                              </a>
+                              
+                              {/* Expanded AI Summary Panel */}
+                              {isSummaryLoading && (
+                                <div style={{ padding: "12px 16px", borderRadius: "8px", border: "1px dashed #c084fc", backgroundColor: "#faf5ff", fontSize: "13px", color: "#6b21a8", display: "flex", alignItems: "center", gap: "8px" }}>
+                                  <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#c084fc", animation: "ping 1s infinite" }}></span>
+                                  Generating study guide and summary with Gemini...
+                                </div>
+                              )}
+                              
+                              {hasSummary && !isSummaryLoading && (
+                                <div style={{ 
+                                  padding: "16px", 
+                                  borderRadius: "8px", 
+                                  border: "1px solid #e9d5ff", 
+                                  backgroundColor: "#fdfaff",
+                                  fontSize: "13.5px",
+                                  color: "#3b0764",
+                                  lineHeight: "1.6",
+                                  boxShadow: "inset 0 2px 4px rgba(0,0,0,0.02)",
+                                  position: "relative"
+                                }}>
+                                  <button 
+                                    onClick={() => setSummaries(prev => {
+                                      const copy = { ...prev };
+                                      delete copy[materialId];
+                                      return copy;
+                                    })}
+                                    style={{ position: "absolute", top: "8px", right: "8px", background: "none", border: "none", cursor: "pointer", color: "#a855f7" }}
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                  <div style={{ whiteSpace: "pre-line" }}>
+                                    {summaries[materialId]}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
                           );
                         })
                       )}

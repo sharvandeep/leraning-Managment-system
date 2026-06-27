@@ -8,6 +8,7 @@ import {
   UserRound,
 } from "lucide-react";
 import DashboardLayout from "./DashboardLayout";
+import AiTutorChat from "../components/ai/AiTutorChat";
 
 const navItems = [
   { to: "/student/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -20,5 +21,11 @@ const navItems = [
 ];
 
 export default function StudentLayout() {
-  return <DashboardLayout role="student" navItems={navItems} />;
+  return (
+    <>
+      <DashboardLayout role="student" navItems={navItems} />
+      <AiTutorChat />
+    </>
+  );
 }
+

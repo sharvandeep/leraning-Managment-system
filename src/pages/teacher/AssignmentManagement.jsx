@@ -1,4 +1,4 @@
-import { CheckCircle2, Download, Eye, Plus, Star, X } from "lucide-react";
+import { CheckCircle2, Download, Eye, Plus, Star, X, Sparkles } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import Badge from "../../components/common/Badge";
 import PageHeader from "../../components/common/PageHeader";
@@ -8,8 +8,10 @@ import useAuth from "../../hooks/useAuth";
 import { useRoleData } from "../../hooks/useRoleData";
 import useSessionState from "../../hooks/useSessionState";
 import { assignmentService } from "../../services/assignmentService";
+import { aiService } from "../../services/aiService";
 import { formatDate } from "../../utils/formatters";
 import styles from "../../styles/ui.module.css";
+
 
 export default function AssignmentManagement() {
   const { user } = useAuth();
@@ -144,6 +146,34 @@ export default function AssignmentManagement() {
     }
   };
 
+  const [aiGradingLoading, setAiGradingLoading] = useState(false);
+
+  const handleAiGrade = async () => {
+    if (!selected || !selectedSubmission) return;
+    setAiGradingLoading(true);
+    setErrorMsg("");
+    setSuccessMsg("");
+    try {
+      const result = await aiService.gradeAssignment(
+        selected.title,
+        selected.instructions,
+        selected.total_marks || selected.maxMarks || 100,
+        selectedSubmission.studentName,
+        selectedSubmission.file_path || "Submitted document file"
+      );
+      setGradeForm({
+        marks: String(result.score),
+        feedback: result.feedback
+      });
+      setSuccessMsg("AI Grade and feedback suggestions drafted successfully!");
+    } catch (err) {
+      setErrorMsg("AI grading helper failed: " + err.message);
+    } finally {
+      setAiGradingLoading(false);
+    }
+  };
+
+
   // Build the full backend URL for file downloads
   const getFileUrl = (filePath) => {
     const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
@@ -263,6 +293,27 @@ export default function AssignmentManagement() {
               </div>
 
               <div className={styles.form} style={{ marginTop: "0.5rem" }}>
+                <button 
+                  className={styles.buttonSecondary} 
+                  type="button" 
+                  onClick={handleAiGrade}
+                  disabled={aiGradingLoading}
+                  style={{ 
+                    display: "flex", 
+                    alignItems: "center", 
+                    gap: "8px", 
+                    width: "100%", 
+                    justifyContent: "center", 
+                    marginBottom: "1rem", 
+                    border: "1px solid #7c3aed", 
+                    color: "#7c3aed",
+                    fontWeight: "600",
+                    background: "#fdfaff" 
+                  }}
+                >
+                  <Sparkles size={16} /> {aiGradingLoading ? "AI analyzing submission..." : "✨ Auto Grade & Feedback with AI"}
+                </button>
+
                 <TextField 
                   label={`Score (Max: ${selected.total_marks})`}
                   name="marks"
