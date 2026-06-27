@@ -1,5 +1,5 @@
-import { BarChart3, CheckCircle2, ListPlus, Plus, Sparkles, Trash2, Wand2 } from "lucide-react";
-import { useState } from "react";
+import { BarChart3, CheckCircle2, ListPlus, Plus, Sparkles, Trash2, Wand2, X } from "lucide-react";
+import { useState, useEffect } from "react";
 import Badge from "../../components/common/Badge";
 import PageHeader from "../../components/common/PageHeader";
 import SelectField from "../../components/forms/SelectField";
@@ -33,11 +33,44 @@ export default function QuizManagement() {
   const [generatedQuestions, setGeneratedQuestions] = useState([]);
   const [aiTitle, setAiTitle] = useState("");
 
+  // Quiz Attempts Review State
+  const [selectedQuizId, setSelectedQuizId] = useState(null);
+  const [quizResults, setQuizResults] = useState([]);
+  const [resultsLoading, setResultsLoading] = useState(false);
+
   const courseIds = courses.map((course) => course.id);
   const rows = [...quizzes, ...createdQuizzes.filter((quiz) => courseIds.includes(quiz.courseId))];
   const averageQuizScore = rows.length
     ? Math.round(rows.reduce((sum, quiz) => sum + (quiz.averageScore || 0), 0) / rows.length)
     : 0;
+
+  const selectedQuiz = rows.find((q) => q.id === selectedQuizId);
+
+  // Load quiz attempt results when a quiz is selected
+  useEffect(() => {
+    if (!selectedQuizId) return;
+    let active = true;
+    setResultsLoading(true);
+    
+    quizService.getQuizResults(selectedQuizId)
+      .then((res) => {
+        if (active) {
+          setQuizResults(res);
+          setResultsLoading(false);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load quiz attempt results", err);
+        if (active) {
+          setQuizResults([]);
+          setResultsLoading(false);
+        }
+      });
+      
+    return () => {
+      active = false;
+    };
+  }, [selectedQuizId]);
 
   const updateForm = (event) => {
     setForm((current) => ({ ...current, [event.target.name]: event.target.value }));
@@ -68,75 +101,52 @@ export default function QuizManagement() {
       ]);
 
       setForm({ courseId: course.id, title: "", date: "", questions: 5, duration: "15 min" });
-      alert("Quiz created successfully!");
     } catch (err) {
       alert("Failed to create quiz: " + err.message);
     }
   };
 
   const generateAiQuiz = async () => {
-    if (!aiTopic.trim()) {
-      alert("Please enter a topic or topic outline first!");
-      return;
-    }
+    if (!aiTopic.trim()) return;
     setAiLoading(true);
-    setGeneratedQuestions([]);
     try {
-      const response = await aiService.generateQuiz(aiTopic, form.questions, form.duration);
-      setAiTitle(response.title || `Quiz on ${aiTopic}`);
-      setGeneratedQuestions(response.questions || []);
+      const result = await aiService.generateQuiz(aiTopic, 5, "15 min");
+      setGeneratedQuestions(result.questions);
+      setAiTitle(result.title || `AI Quiz: ${aiTopic.trim()}`);
     } catch (err) {
-      console.error("AI quiz generation error", err);
-      alert("AI generation failed: " + err.message);
+      alert("Failed to generate AI Quiz: " + err.message);
     } finally {
       setAiLoading(false);
     }
   };
 
   const saveAiQuiz = async (status = "Open") => {
-    const course = courses.find((item) => item.id === form.courseId);
-    if (!course) {
-      alert("Please select a course to map the quiz to.");
-      return;
-    }
-    if (!aiTitle.trim()) {
-      alert("Please enter a quiz title.");
-      return;
-    }
-    if (generatedQuestions.length === 0) {
-      alert("Please generate questions first!");
-      return;
-    }
+    const course = courses[0]; // Default to teacher's first course
+    if (!course || !aiTitle.trim()) return;
 
     try {
+      // 1. Create quiz container
       const payload = {
         title: aiTitle.trim(),
         questions: generatedQuestions.length,
-        duration: form.duration,
+        duration: "15 min",
         attempts: 1,
       };
+      const newQuiz = await quizService.createQuiz(course.id, payload);
 
-      // 1. Create quiz container
-      const savedQuiz = await quizService.createQuiz(course.id, payload);
-
-      // 2. Try saving questions to database
+      // 2. Create questions in DB
       for (const q of generatedQuestions) {
-        try {
-          await quizService.createQuestion(savedQuiz.id, {
-            questionText: q.question,
-            questionType: "mcq",
-            options: q.options,
-            correctOptionIndex: q.options.indexOf(q.answer) !== -1 ? q.options.indexOf(q.answer) : 0,
-            marks: 5,
-          });
-        } catch (qErr) {
-          console.warn("Failed to create question in DB, adding locally", qErr);
-        }
+        await quizService.createQuestion(newQuiz.id, {
+          questionText: q.question,
+          options: q.options,
+          correctOptionIndex: q.options.indexOf(q.answer) !== -1 ? q.options.indexOf(q.answer) : 0,
+          marks: 5
+        });
       }
 
       setCreatedQuizzes((current) => [
         {
-          ...savedQuiz,
+          ...newQuiz,
           status,
           courseTitle: course.title,
         },
@@ -148,105 +158,114 @@ export default function QuizManagement() {
       setAiTopic("");
       setAiTitle("");
       setIsAiMode(false);
-      alert("AI Quiz and questions saved successfully!");
+      alert("AI Quiz created & published successfully!");
     } catch (err) {
-      alert("Failed to save AI quiz: " + err.message);
+      alert("Failed to save AI Quiz: " + err.message);
     }
   };
 
   if (loading) {
-    return <PageHeader title="Loading..." subtitle="Loading quizzes..." />;
+    return <PageHeader title="Loading..." subtitle="Synchronizing class quizzes..." />;
   }
 
   return (
     <section className={`${styles.page} ${styles.teacherPage}`}>
       <PageHeader
         title="Quiz Management"
-        subtitle="Create quizzes, add questions, publish attempts, and review results for assigned courses."
+        subtitle="Schedule mock papers, generate AI evaluations, and review student grades."
         action={
           <button 
             className={styles.button} 
-            type="button" 
             onClick={() => setIsAiMode(!isAiMode)}
-            style={{ display: "flex", gap: "8px", background: isAiMode ? "var(--text)" : "linear-gradient(135deg, #7c3aed 0%, #2563eb 100%)", color: "white" }}
+            style={{ 
+              background: isAiMode ? "linear-gradient(135deg, #475569 0%, #1e293b 100%)" : "linear-gradient(135deg, #7c3aed 0%, #2563eb 100%)", 
+              color: "white", 
+              display: "flex", 
+              alignItems: "center", 
+              gap: "6px" 
+            }}
           >
-            {isAiMode ? "Standard Builder" : <><Sparkles size={18} /> Try AI Quiz Generator</>}
+            <Sparkles size={16} /> {isAiMode ? "Use Standard Builder" : "Try AI Quiz Generator"}
           </button>
         }
       />
-      <div className={styles.grid2}>
-        <article className={styles.panel} style={{ border: isAiMode ? "1px solid #7c3aed" : "1px solid var(--line)" }}>
-          <div className={styles.panelHeader} style={{ background: isAiMode ? "#f5f3ff" : "none" }}>
-            <h2 className={styles.panelTitle} style={{ color: isAiMode ? "#7c3aed" : "inherit", display: "flex", alignItems: "center", gap: "8px" }}>
-              {isAiMode ? <><Sparkles size={18} /> AI Quiz Builder</> : "Standard Quiz Builder"}
-            </h2>
-          </div>
-          <div className={styles.panelBody}>
-            {isAiMode ? (
-              <form className={styles.form} onSubmit={(event) => event.preventDefault()}>
-                <SelectField 
-                  label="Map to Course" 
-                  name="courseId" 
-                  options={courses.map((course) => ({ label: course.title, value: course.id }))} 
-                  value={form.courseId} 
-                  onChange={updateForm} 
-                />
-                
-                <TextField 
-                  label="Topic / Subject Outline" 
-                  placeholder="e.g. Asynchronous Javascript, React hooks, photosynthesis basics..." 
-                  name="aiTopic"
-                  value={aiTopic}
-                  onChange={(e) => setAiTopic(e.target.value)}
-                />
 
-                <div className={styles.formGrid}>
-                  <TextField 
-                    label="Number of Questions" 
-                    name="questions" 
-                    type="number" 
-                    value={form.questions} 
-                    onChange={updateForm} 
-                  />
-                  <TextField 
-                    label="Quiz Duration" 
-                    name="duration" 
-                    value={form.duration} 
-                    onChange={updateForm} 
-                  />
-                </div>
+      <div className={styles.assignmentWorkspace}>
+        {/* Left Form: Builder */}
+        {!isAiMode ? (
+          <article className={styles.panel}>
+            <div className={styles.panelHeader}><h2 className={styles.panelTitle}>Schedule Quiz</h2></div>
+            <div className={styles.panelBody} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <SelectField
+                label="Assign to Course"
+                name="courseId"
+                onChange={updateForm}
+                options={courses.map((item) => ({ label: item.title, value: item.id }))}
+                value={form.courseId}
+              />
+              <TextField label="Quiz Title" name="title" onChange={updateForm} value={form.title} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <TextField label="Questions count" name="questions" type="number" onChange={updateForm} value={form.questions} />
+                <SelectField
+                  label="Time limit"
+                  name="duration"
+                  onChange={updateForm}
+                  options={[
+                    { label: "15 Minutes", value: "15 min" },
+                    { label: "30 Minutes", value: "30 min" },
+                    { label: "45 Minutes", value: "45 min" },
+                    { label: "60 Minutes", value: "60 min" },
+                  ]}
+                  value={form.duration}
+                />
+              </div>
+              <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+                <button className={styles.button} onClick={() => createQuiz("Open")} type="button">
+                  <CheckCircle2 size={16} style={{ marginRight: "4px" }} /> Publish Quiz
+                </button>
+                <button className={styles.buttonSecondary} onClick={() => createQuiz("Draft")} type="button">
+                  <ListPlus size={16} style={{ marginRight: "4px" }} /> Save Draft
+                </button>
+              </div>
+            </div>
+          </article>
+        ) : (
+          <article className={styles.panel} style={{ border: "1px solid #7c3aed", backgroundColor: "#fdfaff" }}>
+            <div className={styles.panelHeader}>
+              <h2 className={styles.panelTitle} style={{ color: "#6d28d9", display: "flex", alignItems: "center", gap: "6px" }}>
+                <Sparkles size={18} /> AI Quiz Generator
+              </h2>
+            </div>
+            <div className={styles.panelBody} style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <p style={{ fontSize: "13px", color: "#4b5563", lineHeight: "1.5", margin: 0 }}>
+                Specify a topic, and AI will draft five multiple-choice questions with answers instantly!
+              </p>
+              
+              <TextField 
+                label="Study Topic / Syllabus Module" 
+                placeholder="e.g. React Hooks, JavaScript Closures" 
+                value={aiTopic}
+                onChange={(e) => setAiTopic(e.target.value)}
+              />
 
-                <div className={styles.heroActions} style={{ marginTop: "1rem" }}>
-                  <button 
-                    className={styles.button} 
-                    type="button" 
-                    onClick={generateAiQuiz}
-                    disabled={aiLoading}
-                    style={{ background: "#7c3aed", color: "white", flex: 1, display: "flex", justifyContent: "center", alignItems: "center", gap: "8px" }}
-                  >
-                    {aiLoading ? "Generating Questions..." : <><Wand2 size={18} /> Generate Questions</>}
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <form className={styles.form} onSubmit={(event) => event.preventDefault()}>
-                <SelectField label="Course" name="courseId" options={courses.map((course) => ({ label: course.title, value: course.id }))} value={form.courseId} onChange={updateForm} />
-                <TextField label="Quiz Title" name="title" value={form.title} onChange={updateForm} />
-                <div className={styles.formGrid}>
-                  <TextField label="Questions" name="questions" type="number" value={form.questions} onChange={updateForm} />
-                  <TextField label="Duration" name="duration" value={form.duration} onChange={updateForm} />
-                </div>
-                <TextField label="Quiz Date" name="date" type="date" value={form.date} onChange={updateForm} />
-                <div className={styles.heroActions}>
-                  <button className={styles.buttonSecondary} type="button" onClick={() => setForm((current) => ({ ...current, questions: Number(current.questions) + 1 }))}><ListPlus size={18} /> Add Question</button>
-                  <button className={styles.button} type="button" onClick={() => createQuiz("Open")}>Publish</button>
-                  <button className={styles.buttonSecondary} type="button" onClick={() => createQuiz("Draft")}>Save Draft</button>
-                </div>
-              </form>
-            )}
-          </div>
-        </article>
-        
+              <button 
+                className={styles.button} 
+                onClick={generateAiQuiz} 
+                disabled={aiLoading || !aiTopic.trim()}
+                style={{ 
+                  background: "linear-gradient(135deg, #7c3aed 0%, #2563eb 100%)", 
+                  color: "white", 
+                  marginTop: "8px",
+                  opacity: (aiLoading || !aiTopic.trim()) ? 0.6 : 1
+                }}
+              >
+                {aiLoading ? "Generating questions..." : "Generate Questions"}
+              </button>
+            </div>
+          </article>
+        )}
+
+        {/* Right Form: Aggregate Overview */}
         <article className={styles.panel}>
           <div className={styles.panelHeader}><h2 className={styles.panelTitle}>Results Overview</h2></div>
           <div className={styles.panelBody}>
@@ -324,25 +343,110 @@ export default function QuizManagement() {
         </article>
       )}
 
-      <div className={styles.quizGrid}>
-        {rows.map((quiz) => (
-          <article className={styles.quizCard} key={quiz.id}>
-            <div className={styles.quizTop}>
-              <span className={styles.iconBox}><CheckCircle2 size={18} /></span>
-              <Badge variant={quiz.status === "Open" ? "success" : quiz.status === "Scheduled" ? "warning" : undefined}>{quiz.status}</Badge>
+      {/* Classroom Quizzes List */}
+      <div style={{ marginTop: "24px" }}>
+        <h2 style={{ fontSize: "16px", fontWeight: "700", color: "#1e293b", marginBottom: "12px" }}>Active Quizzes (Click Card to Review Attempts)</h2>
+        <div className={styles.quizGrid}>
+          {rows.map((quiz) => (
+            <article 
+              className={styles.quizCard} 
+              key={quiz.id}
+              onClick={() => setSelectedQuizId(quiz.id)}
+              style={{ cursor: "pointer", transition: "transform 0.2s, box-shadow 0.2s" }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-4px)";
+                e.currentTarget.style.boxShadow = "0 10px 15px -3px rgba(0,0,0,0.1)";
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "none";
+              }}
+            >
+              <div className={styles.quizTop}>
+                <span className={styles.iconBox}><CheckCircle2 size={18} /></span>
+                <Badge variant={quiz.status === "Open" ? "success" : quiz.status === "Scheduled" ? "warning" : undefined}>{quiz.status}</Badge>
+              </div>
+              <h3>{quiz.title}</h3>
+              <p>{quiz.courseTitle}</p>
+              <div className={styles.detailGrid}>
+                <span><strong>Date:</strong> {formatDate(quiz.date)}</span>
+                <span><strong>Questions:</strong> {quiz.questions}</span>
+                <span><strong>Attempts Allowed:</strong> {quiz.attempts}</span>
+                <span><strong>Avg Score:</strong> {quiz.averageScore || 0}%</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+
+      {/* Attempts Review Modal */}
+      {selectedQuizId && (
+        <div style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "100%", backgroundColor: "rgba(0,0,0,0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 1000 }}>
+          <article className={styles.panel} style={{ width: "90%", maxWidth: "600px", position: "relative", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)", border: "1px solid #cbd5e1", borderRadius: "12px" }}>
+            <button 
+              style={{ position: "absolute", top: "1rem", right: "1rem", background: "none", border: "none", cursor: "pointer", padding: "6px", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center" }} 
+              onClick={() => { setSelectedQuizId(null); setQuizResults([]); }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f1f5f9"}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+            >
+              <X size={18} />
+            </button>
+            
+            <div className={styles.panelHeader} style={{ borderBottom: "1px solid #e2e8f0" }}>
+              <h2 className={styles.panelTitle}>Review Quiz Attempts</h2>
             </div>
-            <h3>{quiz.title}</h3>
-            <p>{quiz.courseTitle}</p>
-            <div className={styles.detailGrid}>
-              <span><strong>Date:</strong> {formatDate(quiz.date)}</span>
-              <span><strong>Questions:</strong> {quiz.questions}</span>
-              <span><strong>Attempts:</strong> {quiz.attempts}</span>
-              <span><strong>Average:</strong> {quiz.averageScore || 0}%</span>
+            
+            <div className={styles.panelBody} style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "24px" }}>
+              <div>
+                <h3 style={{ margin: "0 0 4px 0", fontSize: "18px", fontWeight: "700", color: "#0f172a" }}>{selectedQuiz?.title}</h3>
+                <p className={styles.muted} style={{ margin: 0, fontSize: "13px" }}>Course: {selectedQuiz?.courseTitle}</p>
+              </div>
+              
+              <div style={{ marginTop: "12px" }}>
+                <h4 style={{ margin: "0 0 12px 0", fontSize: "14px", fontWeight: "700", color: "#475569", textTransform: "uppercase", letterSpacing: "0.025em" }}>Student Submissions</h4>
+                
+                {resultsLoading ? (
+                  <p style={{ color: "#64748b", fontSize: "13.5px" }}>Loading attempts from database...</p>
+                ) : quizResults.length > 0 ? (
+                  <div style={{ maxHeight: "250px", overflowY: "auto", border: "1px solid #e2e8f0", borderRadius: "8px" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                      <thead>
+                        <tr style={{ backgroundColor: "#f8fafc", borderBottom: "1px solid #e2e8f0", textAlign: "left" }}>
+                          <th style={{ padding: "10px 12px", fontWeight: "600", color: "#475569" }}>Student</th>
+                          <th style={{ padding: "10px 12px", fontWeight: "600", color: "#475569" }}>Date Attempted</th>
+                          <th style={{ padding: "10px 12px", fontWeight: "600", color: "#475569" }}>Score</th>
+                          <th style={{ padding: "10px 12px", fontWeight: "600", color: "#475569", textAlign: "right" }}>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {quizResults.map((res, index) => {
+                          const maxScore = selectedQuiz?.maxScore || 10;
+                          const percent = Math.round((res.score / maxScore) * 100);
+                          return (
+                            <tr key={index} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                              <td style={{ padding: "10px 12px", fontWeight: "600", color: "#1e293b" }}>{res.studentName}</td>
+                              <td style={{ padding: "10px 12px", color: "#64748b" }}>{formatDate(res.attemptDate)}</td>
+                              <td style={{ padding: "10px 12px", fontWeight: "700", color: "#0f172a" }}>{res.score} / {maxScore}</td>
+                              <td style={{ padding: "10px 12px", textAlign: "right" }}>
+                                <Badge variant={percent >= 50 ? "success" : "warning"}>{percent}%</Badge>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div style={{ padding: "20px", textAlign: "center", backgroundColor: "#f8fafc", borderRadius: "8px", border: "1px dashed #cbd5e1" }}>
+                    <p style={{ color: "#64748b", margin: 0, fontSize: "13.5px" }}>No students have attempted this quiz yet.</p>
+                  </div>
+                )}
+              </div>
             </div>
           </article>
-        ))}
-      </div>
+        </div>
+      )}
+
     </section>
   );
 }
-

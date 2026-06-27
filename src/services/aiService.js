@@ -467,5 +467,83 @@ Here are a few quick study directions:
 3. Test your logic by drafting a simple implementation.
 
 If you connect a live model like **Gemini** or **Ollama** in the config panel, I can provide full, detailed LLM responses!`;
+  },
+
+  // 5. AI Student Performance Risk Analysis
+  async analyzeStudentPerformance(studentName, branch, semester, progress, average, submittedCount, totalAssignments, attendance = 85) {
+    const provider = this.getProvider();
+
+    if (provider === "gemini") {
+      const systemInstruction = "You are a professional academic advisor and counselor. Analyze student metrics and output a JSON object containing the risk level (Low, Medium, High), risk factors analysis, and a drafted outreach email.";
+      const prompt = `Perform a student performance risk assessment:
+      - **Student**: ${studentName}
+      - **Branch**: ${branch} (Semester ${semester})
+      - **Course Progress**: ${progress}%
+      - **Grade Average**: ${average}%
+      - **Assignments Submitted**: ${submittedCount} out of ${totalAssignments}
+      - **Attendance Rate**: ${attendance}%
+      
+      Determine the Risk Level ("Low" | "Medium" | "High").
+      Write a concise bulleted analysis explaining the risk factors.
+      Write an encouraging, supportive drafted email from the teacher offering tutoring, office hours, and specific support.
+      
+      Return the response as a JSON object with this exact schema:
+      {
+        "riskLevel": "High",
+        "analysis": "Analysis bullet points here...",
+        "emailDraft": "Drafted email contents here..."
+      }`;
+      return this.callGemini(prompt, systemInstruction, true);
+    }
+
+    if (provider === "ollama") {
+      const systemInstruction = "You are an academic advisor. Reply ONLY with a valid JSON object matching the requested schema.";
+      const prompt = `Analyze this student:
+      - **Name**: ${studentName}
+      - **Progress**: ${progress}%
+      - **Average**: ${average}%
+      - **Assignments**: ${submittedCount}/${totalAssignments}
+      - **Attendance**: ${attendance}%
+      
+      Return a JSON object:
+      {
+        "riskLevel": "Medium",
+        "analysis": "Analysis here...",
+        "emailDraft": "Email draft here..."
+      }`;
+      return this.callOllama(prompt, systemInstruction, true);
+    }
+
+    // Smart Mock Risk Analyzer
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    let riskLevel = "Low";
+    let analysis = "";
+    
+    if (average < 60 || progress < 45 || attendance < 70) {
+      riskLevel = "High";
+      analysis = `• **Critical Academic Risk**: Grade average is currently at ${average}%, which is below passing threshold.\n• **Incomplete Assignments**: Only submitted ${submittedCount} out of ${totalAssignments} assignments, causing missing points.\n• **Attendance Warning**: Attendance is at ${attendance}%, indicating high class absenteeism.`;
+    } else if (average < 75 || progress < 70 || attendance < 80) {
+      riskLevel = "Medium";
+      analysis = `• **Academic Performance**: Grade average is moderate (${average}%), leaving room for improvement.\n• **Progress Delay**: Module progress is currently at ${progress}%. The student is slightly behind the class average.\n• **Moderate Submission Rate**: Has submitted ${submittedCount}/${totalAssignments} assignments. Needs attention.`;
+    } else {
+      riskLevel = "Low";
+      analysis = `• **Excellent Standing**: Average grade is strong at ${average}%.\n• **Good Progress**: Course progress is at ${progress}%, showing timely completion.\n• **Consistent Attendance**: Attendance is stable at ${attendance}%, reflecting strong class engagement.`;
+    }
+
+    const emailDraft = `Subject: Supporting your academic journey in ${branch}
+
+Dear ${studentName},
+
+I hope you are doing well. 
+
+I've been reviewing our class progress in the Learning Management System, and wanted to reach out to see how I can support you. Your current average is ${average}%, and you've submitted ${submittedCount} of the ${totalAssignments} assignments.
+
+If you are finding any of the topics challenging, please feel free to drop by my office hours or stay back after lectures. I want to make sure you have all the resources you need to succeed.
+
+Best regards,
+Prof. (Teacher)`;
+
+    return { riskLevel, analysis, emailDraft };
   }
 };
+

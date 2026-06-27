@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { CheckCircle2, Clock, PlayCircle, Timer } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import Badge from "../../components/common/Badge";
 import PageHeader from "../../components/common/PageHeader";
 import useAuth from "../../hooks/useAuth";
@@ -10,6 +11,7 @@ import styles from "../../styles/ui.module.css";
 export default function Quizzes() {
   const { user } = useAuth();
   const { quizzes } = useRoleData(user);
+  const navigate = useNavigate();
   const [attempted, setAttempted] = useState({});
 
   const getQuizState = (quiz) => attempted[quiz.id] || quiz.studentStatus;
@@ -56,7 +58,7 @@ export default function Quizzes() {
                 <button
                   className={styles.button}
                   type="button"
-                  onClick={() => setAttempted((current) => ({ ...current, [quiz.id]: "Completed" }))}
+                  onClick={() => navigate(`/student/quizzes/${quiz.id}`)}
                 >
                   <PlayCircle size={17} /> Attempt quiz
                 </button>

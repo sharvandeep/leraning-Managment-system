@@ -15,6 +15,7 @@ import MyCourses from "./pages/student/MyCourses.jsx";
 import CourseDetails from "./pages/student/CourseDetails.jsx";
 import StudentAssignments from "./pages/student/Assignments.jsx";
 import StudentQuizzes from "./pages/student/Quizzes.jsx";
+import QuizAttempt from "./pages/student/QuizAttempt.jsx";
 import Grades from "./pages/student/Grades.jsx";
 import StudentNotifications from "./pages/student/Notifications.jsx";
 import StudentProfile from "./pages/student/Profile.jsx";
@@ -54,6 +55,7 @@ export default function App() {
           <Route path="courses/:courseId" element={<CourseDetails />} />
           <Route path="assignments" element={<StudentAssignments />} />
           <Route path="quizzes" element={<StudentQuizzes />} />
+          <Route path="quizzes/:quizId" element={<QuizAttempt />} />
           <Route path="grades" element={<Grades />} />
           <Route path="notifications" element={<StudentNotifications />} />
           <Route path="profile" element={<StudentProfile />} />
