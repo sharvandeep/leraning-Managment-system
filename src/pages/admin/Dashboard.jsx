@@ -69,19 +69,36 @@ export default function AdminDashboard() {
     let active = true;
     async function loadAdminWorkspace() {
       try {
-        // Fetch baseline counts
-        const [studentList, teacherList, courseList, assignmentList, analyticsData, logs, branchList, semesterList] = await Promise.all([
+        // Fetch baseline counts using Promise.allSettled to handle individual request failures gracefully
+        const results = await Promise.allSettled([
           userService.getUsers("student"),
           userService.getUsers("teacher"),
           courseService.getCourses({ includeArchived: true }),
           assignmentService.getAssignments(),
           adminToolsService.getAnalytics(),
           adminToolsService.getActivityLogs(),
-          branchService.getBranches().catch(() => []),
-          semesterService.getSemesters().catch(() => [])
+          branchService.getBranches(),
+          semesterService.getSemesters()
         ]);
 
         if (active) {
+          // Extract values if fulfilled, otherwise fall back to empty defaults
+          const studentList = results[0].status === "fulfilled" ? results[0].value : [];
+          const teacherList = results[1].status === "fulfilled" ? results[1].value : [];
+          const courseList = results[2].status === "fulfilled" ? results[2].value : [];
+          const assignmentList = results[3].status === "fulfilled" ? results[3].value : [];
+          const analyticsData = results[4].status === "fulfilled" ? results[4].value : { registrations: [], branch_performance: [] };
+          const logs = results[5].status === "fulfilled" ? results[5].value : [];
+          const branchList = results[6].status === "fulfilled" ? results[6].value : [];
+          const semesterList = results[7].status === "fulfilled" ? results[7].value : [];
+
+          // Log any failures in console for debugging
+          results.forEach((res, index) => {
+            if (res.status === "rejected") {
+              console.warn(`Admin Dashboard promise at index ${index} failed:`, res.reason);
+            }
+          });
+
           setStats({
             students: studentList.length,
             teachers: teacherList.length,
@@ -96,7 +113,7 @@ export default function AdminDashboard() {
           setLoading(false);
         }
       } catch (err) {
-        console.error("Failed to load admin workspace", err);
+        console.error("Critical failure loading admin workspace", err);
         if (active) {
           setGeneralError("Failed to load platform statistics.");
           setLoading(false);

@@ -21,22 +21,26 @@ const mapAssignment = (backendAsg) => {
 export const assignmentService = {
   async getAssignments(courseIds) {
     if (courseIds && courseIds.length === 0) return [];
-    let ids = courseIds;
-    if (!ids || !ids.length) {
-      // Fetch all courses first to determine which assignments to load
+    
+    // If no courseIds are specified, fetch all assignments from the new single backend endpoint
+    if (!courseIds || !courseIds.length) {
       try {
-        const coursesResponse = await apiClient.get("/courses");
-        ids = coursesResponse.data.map(c => c.course_id || c.id);
+        const response = await apiClient.get("/assignments");
+        return response.data.map(mapAssignment);
       } catch (err) {
-        console.error("Failed to fetch courses for assignments", err);
+        console.error("Failed to fetch all assignments", err);
         return [];
       }
     }
     
-    if (!ids || !ids.length) return [];
-    
-    const fetchPromises = ids.map((courseId) =>
-      apiClient.get(`/courses/${courseId}/assignments`).then((res) => res.data)
+    // Otherwise, fetch assignments for the specified course IDs
+    const fetchPromises = courseIds.map((courseId) =>
+      apiClient.get(`/courses/${courseId}/assignments`)
+        .then((res) => res.data)
+        .catch((err) => {
+          console.error(`Failed to fetch assignments for course ${courseId}:`, err);
+          return []; // Fail gracefully by returning an empty list for this course
+        })
     );
     
     const results = await Promise.all(fetchPromises);
