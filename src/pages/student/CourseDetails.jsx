@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BookOpen, ClipboardList, FileText, PenLine, Star, MessageSquare, Send, Award, CheckCircle, Sparkles, X } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
+import API_URL from "../../services/api";
 import Badge from "../../components/common/Badge";
 import DataTable from "../../components/tables/DataTable";
 import PageHeader from "../../components/common/PageHeader";
@@ -282,7 +283,7 @@ export default function CourseDetails() {
                       ) : (
                         module.materials.map((material) => {
                           const materialId = material.material_id || material.id;
-                          const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+                          const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || API_URL;
                           const rootBaseUrl = apiBaseUrl.replace(/\/api$/, "");
                           const fullFilePath = material.file_path.startsWith("http") 
                             ? material.file_path 

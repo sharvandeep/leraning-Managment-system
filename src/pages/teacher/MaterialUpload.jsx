@@ -9,6 +9,7 @@ import useSessionState from "../../hooks/useSessionState";
 import { formatDate } from "../../utils/formatters";
 import { courseService } from "../../services/courseService";
 import { materialService } from "../../services/materialService";
+import API_URL from "../../services/api";
 import styles from "../../styles/ui.module.css";
 
 const materialTypes = [
@@ -312,7 +313,7 @@ export default function MaterialUpload() {
             ) : (
               <div className={styles.materialGrid} style={{ display: "grid", gap: "12px" }}>
                 {dbMaterials.map((material) => {
-                  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+                  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || API_URL;
                   const rootBaseUrl = apiBaseUrl.replace(/\/api$/, "");
                   const fullFilePath = material.file_path?.startsWith("http") 
                     ? material.file_path 

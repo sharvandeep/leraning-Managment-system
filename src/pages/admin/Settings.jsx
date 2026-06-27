@@ -3,6 +3,7 @@ import PageHeader from "../../components/common/PageHeader";
 import TextField from "../../components/forms/TextField";
 import SelectField from "../../components/forms/SelectField";
 import { settingService } from "../../services/settingService";
+import API_URL from "../../services/api";
 import styles from "../../styles/ui.module.css";
 
 export default function Settings() {
@@ -18,7 +19,7 @@ export default function Settings() {
   const [courseAllocationRule, setCourseAllocationRule] = useState("Branch + Semester (Synchronized)");
   const [deletionGuard, setDeletionGuard] = useState("true");
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || API_URL;
 
   async function loadSettings() {
     try {

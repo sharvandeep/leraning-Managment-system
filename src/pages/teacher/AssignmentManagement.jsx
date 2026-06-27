@@ -10,6 +10,7 @@ import useSessionState from "../../hooks/useSessionState";
 import { assignmentService } from "../../services/assignmentService";
 import { aiService } from "../../services/aiService";
 import { formatDate } from "../../utils/formatters";
+import API_URL from "../../services/api";
 import styles from "../../styles/ui.module.css";
 
 
@@ -176,7 +177,7 @@ export default function AssignmentManagement() {
 
   // Build the full backend URL for file downloads
   const getFileUrl = (filePath) => {
-    const apiBase = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000/api";
+    const apiBase = import.meta.env.VITE_API_BASE_URL || API_URL;
     const host = apiBase.replace("/api", "");
     return `${host}${filePath}`;
   };

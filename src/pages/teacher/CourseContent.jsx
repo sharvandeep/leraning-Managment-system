@@ -8,6 +8,7 @@ import { useRoleData } from "../../hooks/useRoleData";
 import useSessionState from "../../hooks/useSessionState";
 import { formatDate } from "../../utils/formatters";
 import { courseService } from "../../services/courseService";
+import API_URL from "../../services/api";
 import styles from "../../styles/ui.module.css";
 
 export default function CourseContent() {
@@ -133,7 +134,7 @@ export default function CourseContent() {
                             <p style={{ fontSize: '13px', color: 'var(--muted)', margin: '0', paddingLeft: '4px' }}>No study materials uploaded for this module.</p>
                           ) : (
                             module.materials.map((material) => {
-                              const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+                              const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || API_URL;
                               const rootBaseUrl = apiBaseUrl.replace(/\/api$/, "");
                               const fullFilePath = material.file_path.startsWith("http") 
                                 ? material.file_path 
@@ -181,11 +182,11 @@ export default function CourseContent() {
                     <p className={styles.muted}>No materials uploaded for this course yet.</p>
                   ) : (
                     courseMaterials.map((material) => {
-                      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
-                      const rootBaseUrl = apiBaseUrl.replace(/\/api$/, "");
-                      const fullFilePath = material.file_path?.startsWith("http") 
-                        ? material.file_path 
-                        : `${rootBaseUrl}${material.file_path}`;
+                       const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || API_URL;
+                       const rootBaseUrl = apiBaseUrl.replace(/\/api$/, "");
+                       const fullFilePath = material.file_path?.startsWith("http") 
+                         ? material.file_path 
+                         : `${rootBaseUrl}${material.file_path}`;
                       return (
                         <article className={styles.materialCard} key={material.id} style={{ border: '1px solid var(--line)', borderRadius: '12px', padding: '16px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
