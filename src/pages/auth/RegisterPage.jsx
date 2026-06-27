@@ -109,6 +109,7 @@ export default function RegisterPage() {
       setIsSubmitting(false);
     }
   };
+  const branchOptions = branches.map((b) => ({ value: String(b.branch_id), label: b.name }));
   const semesterOptions = semesters.map((s) => ({ value: String(s.semester_id), label: s.name }));
 
   if (successMessage) {
