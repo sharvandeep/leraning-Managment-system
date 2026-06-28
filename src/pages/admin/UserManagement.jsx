@@ -3,7 +3,6 @@ import Badge from "../../components/common/Badge";
 import PageHeader from "../../components/common/PageHeader";
 import TextField from "../../components/forms/TextField";
 import SelectField from "../../components/forms/SelectField";
-import DataTable from "../../components/tables/DataTable";
 import { userService } from "../../services/userService";
 import { branchService } from "../../services/branchService";
 import { semesterService } from "../../services/semesterService";
@@ -13,6 +12,7 @@ export default function UserManagement() {
   const [users, setUsers] = useState([]);
   const [branches, setBranches] = useState([]);
   const [semesters, setSemesters] = useState([]);
+  const [selectedIds, setSelectedIds] = useState([]);
 
   // Form State
   const [name, setName] = useState("");
@@ -107,39 +107,50 @@ export default function UserManagement() {
     }
   };
 
-  const rows = users.map((u) => ({
-    id: u.id,
-    user_id: u.user_id,
-    name: u.name,
-    email: u.email,
-    role: u.role,
-    branch: u.branch || "Global", // resolved branch name
-    semester: u.semester || "-", // resolved semester name
-  }));
+  const handleSelectAll = (event) => {
+    if (event.target.checked) {
+      const deletableUserIds = users
+        .filter((u) => u.role !== "admin")
+        .map((u) => u.id);
+      setSelectedIds(deletableUserIds);
+    } else {
+      setSelectedIds([]);
+    }
+  };
 
-  const columns = [
-    { key: "user_id", label: "User ID" },
-    { key: "name", label: "Name" },
-    { key: "email", label: "Email" },
-    { key: "role", label: "Role", render: (row) => <Badge>{row.role}</Badge> },
-    { key: "branch", label: "Branch" },
-    { key: "semester", label: "Semester" },
-    {
-      key: "actions",
-      label: "Actions",
-      render: (row) => (
-        <button
-          className={styles.buttonDangerCompact}
-          style={{ padding: "4px 8px", fontSize: "12px" }}
-          type="button"
-          disabled={row.role === "admin"}
-          onClick={() => handleDelete(row.id, row.name, row.role)}
-        >
-          Delete
-        </button>
-      ),
-    },
-  ];
+  const handleSelectOne = (userId) => {
+    setSelectedIds((prev) =>
+      prev.includes(userId)
+        ? prev.filter((id) => id !== userId)
+        : [...prev, userId]
+    );
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    
+    if (!window.confirm(`Are you sure you want to delete the ${selectedIds.length} selected user accounts? This action will remove all their database records and cannot be undone.`)) {
+      return;
+    }
+    
+    setError("");
+    setSuccess("");
+    setSubmitting(true);
+    
+    try {
+      for (const id of selectedIds) {
+        await userService.deleteUser(id);
+      }
+      setSuccess(`Successfully deleted ${selectedIds.length} user accounts.`);
+      setSelectedIds([]);
+      loadData();
+    } catch (err) {
+      setError(err.response?.data?.detail || "Failed to delete some user accounts.");
+      loadData();
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const branchOptions = branches.map((b) => ({ value: String(b.branch_id), label: b.name }));
   const semesterOptions = semesters.map((s) => ({ value: String(s.semester_id), label: s.name }));
@@ -232,12 +243,86 @@ export default function UserManagement() {
       </div>
 
       <article className={styles.panel}>
-        <div className={styles.panelHeader}><h2 className={styles.panelTitle}>Institution Directory</h2></div>
+        <div className={styles.panelHeader} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <h2 className={styles.panelTitle}>Institution Directory</h2>
+          {selectedIds.length > 0 && (
+            <button
+              className={styles.buttonDangerCompact}
+              onClick={handleBulkDelete}
+              disabled={submitting}
+              style={{ padding: "6px 12px", fontSize: "13px" }}
+            >
+              Delete Selected ({selectedIds.length})
+            </button>
+          )}
+        </div>
         <div className={styles.panelBody}>
           {users.length === 0 ? (
             <p>No registered users found.</p>
           ) : (
-            <DataTable columns={columns} rows={rows} />
+            <div className={styles.tableWrap}>
+              <table className={styles.table}>
+                <thead>
+                  <tr>
+                    <th style={{ width: "40px", textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        onChange={handleSelectAll}
+                        checked={
+                          users.length > 0 &&
+                          users.filter((u) => u.role !== "admin").every((u) => selectedIds.includes(u.id))
+                        }
+                      />
+                    </th>
+                    <th>User ID</th>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Branch</th>
+                    <th>Semester</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((user) => {
+                    const isDeletable = user.role !== "admin";
+                    const isChecked = selectedIds.includes(user.id);
+                    return (
+                      <tr key={user.id}>
+                        <td style={{ textAlign: "center" }}>
+                          {isDeletable && (
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => handleSelectOne(user.id)}
+                            />
+                          )}
+                        </td>
+                        <td>{user.user_id}</td>
+                        <td>{user.name}</td>
+                        <td>{user.email}</td>
+                        <td>
+                          <Badge>{user.role}</Badge>
+                        </td>
+                        <td>{user.branch || "Global"}</td>
+                        <td>{user.semester || "-"}</td>
+                        <td>
+                          <button
+                            className={styles.buttonDangerCompact}
+                            style={{ padding: "4px 8px", fontSize: "12px" }}
+                            type="button"
+                            disabled={!isDeletable || submitting}
+                            onClick={() => handleDelete(user.id, user.name, user.role)}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
       </article>
