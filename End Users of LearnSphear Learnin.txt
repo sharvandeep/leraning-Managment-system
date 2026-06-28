@@ -1,0 +1,17 @@
+## End Users of LearnSphear Learning Management System
+
+The LearnSphear Learning Management System is designed to serve three primary categories of users, each with specific roles and responsibilities within the platform.
+
+### 1. Students
+
+Students are the primary users of the system. They can register by selecting their branch and semester, after which they are automatically enrolled in the corresponding courses. Students can access course materials, submit assignments, take quizzes, view grades, receive notifications, track academic progress, and utilize AI-powered features such as the Study Tutor, AI Quiz Generator, and Course Material Summarizer.
+
+### 2. Teachers
+
+Teachers are responsible for managing the academic content of their assigned courses. They can upload study materials, create assignments and quizzes, evaluate student submissions, provide grades and feedback, monitor student performance, and utilize AI-powered features such as Academic Risk Analysis, AI Quiz Generation, and AI-Assisted Assignment Grading.
+
+### 3. Administrator
+
+The Administrator has complete control over the Learning Management System. The administrator manages students, teachers, branches, semesters, courses, teacher allocations, and overall platform settings. They are responsible for maintaining the academic structure, monitoring system activities, and ensuring smooth operation of the platform.
+
+These three user roles work together to create a secure, efficient, and intelligent digital learning environment that supports effective teaching, learning, and academic administration.
